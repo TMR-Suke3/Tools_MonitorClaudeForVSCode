@@ -22,7 +22,7 @@ jobs:
     # add a cache step when it acquires one.
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Show the toolchain
         run: |

@@ -1,0 +1,50 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "mcv-board",
+  "version": "0.1.4",
+  "identifier": "dev.tmr-suke3.mcv-board",
+  "build": {
+    "frontendDist": "ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "board",
+        "title": "Claude session board",
+        "width": 300,
+        "height": 310,
+        "x": 80,
+        "y": 80,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": false,
+        "transparent": true,
+        "shadow": false,
+        "focus": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "msi",
+      "nsis"
+    ],
+    "icon": [
+      "icons/icon.ico"
+    ],
+    "category": "DeveloperTool",
+    "shortDescription": "A status board for Claude Code for VS Code sessions",
+    "longDescription": "One always-on-top window showing every Claude Code session across every VS Code window, so that \"which session needs me?\" is answerable at a glance.",
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  }
+}

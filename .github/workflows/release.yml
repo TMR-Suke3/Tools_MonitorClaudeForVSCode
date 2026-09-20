@@ -1,0 +1,162 @@
+name: Release
+
+# Cutting a release is pushing a tag. Nothing else publishes, so `main` staying green
+# never produces a download by accident.
+on:
+  push:
+    tags: ["v*"]
+
+# The default token is read-only (see ci.yml); creating a release needs to write.
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    # The product targets Windows 11 (ADR-0002), so this is both the only platform worth
+    # shipping and the only one the checks mean anything on.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Show the toolchain
+        run: |
+          rustup show
+          cargo --version
+
+      # Three places say the version, and a download whose name and whose `--version`
+      # disagree is worse than a release that did not happen. `tauri.conf.json` matters as
+      # much as the manifest: the bundler takes the installers' file names from it, so a
+      # stale value there ships `mcv-board_0.1.0_x64-setup.exe` from tag v0.1.1.
+      - name: The tag must match every version in the tree
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}" -replace '^v', ''
+          $manifest = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          $conf = (Get-Content crates/board/tauri.conf.json -Raw | ConvertFrom-Json).version
+          "tag              : $tag"
+          "Cargo.toml       : $manifest"
+          "tauri.conf.json  : $conf"
+          if ($manifest -ne $tag) {
+            throw "tag v$tag does not match Cargo.toml ($manifest)"
+          }
+          if ($conf -ne $tag) {
+            throw "tag v$tag does not match tauri.conf.json ($conf), which names the installers"
+          }
+
+      # Nothing ships untested. CI runs this on every push, but a tag can point at any
+      # commit, so the artifact is built from a tree that was checked here and now.
+      - name: Test
+        run: cargo test --workspace
+
+      - name: Build
+        run: cargo build --release -p mcv-board -p mcv-hook
+
+      # The npm build of the CLI is a prebuilt binary; `cargo install tauri-cli` compiles it
+      # from source and costs minutes for the same tool. Pinned, so a release is not at the
+      # mercy of whatever the CLI does next.
+      - name: Install the Tauri CLI
+        run: npm install -g @tauri-apps/cli@2.5.0
+
+      # The bundler picks the helper up from here, named for the target it was built for.
+      # Staged from the build above rather than committed, so what ships is what was tested.
+      - name: Stage the helper for the bundler
+        shell: pwsh
+        run: |
+          $triple = (rustc -vV | Select-String '^host: (.+)$').Matches[0].Groups[1].Value
+          New-Item -ItemType Directory -Force -Path crates/board/binaries | Out-Null
+          Copy-Item target/release/mcv-hook.exe "crates/board/binaries/mcv-hook-$triple.exe"
+          Get-ChildItem crates/board/binaries
+
+      # `tauri.bundle.json` is merged over the main config and adds the one thing that must
+      # not live in it: `externalBin` makes `tauri-build` demand the sidecar on *every*
+      # build of this crate, `cargo test` included, and the sidecar is a build artefact that
+      # is not committed. Declaring it here keeps a fresh clone buildable and still ships
+      # the helper inside the installers.
+      - name: Build the installers
+        working-directory: crates/board
+        run: tauri build --config tauri.bundle.json
+
+      # Three downloads, because they are for three situations: the installer most people
+      # want, the MSI for machines that are managed, and the zip for anyone who would rather
+      # unpack something than run an installer.
+      #
+      # The zip carries both executables deliberately. `mcv-hook.exe` has to sit beside
+      # `mcv-board.exe` -- the setup writes the helper's path into the user's settings and
+      # takes it from `current_exe()`'s own directory (crates/board/src/setup.rs). The
+      # installers solve the same problem by declaring the helper a sidecar
+      # (crates/board/tauri.conf.json); either way, shipping the board alone would leave
+      # exact mode unable to install with nothing on screen explaining why.
+      #
+      # Files are listed rather than globbed, so what ships is stated here and anything that
+      # stops being built fails the step instead of going missing from the release in
+      # silence.
+      - name: Package
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^v', ''
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+
+          $zip = "dist/mcv-board-$version-windows-x64.zip"
+          $zipped = @(
+            "target/release/mcv-board.exe",
+            "target/release/mcv-hook.exe",
+            "README.md",
+            "LICENSE"
+          )
+          foreach ($f in $zipped) {
+            if (-not (Test-Path $f)) { throw "missing from the build: $f" }
+          }
+          Compress-Archive -Path $zipped -DestinationPath $zip
+
+          $setup = "target/release/bundle/nsis/mcv-board_${version}_x64-setup.exe"
+          $msi = "target/release/bundle/msi/mcv-board_${version}_x64_en-US.msi"
+          foreach ($f in @($setup, $msi)) {
+            if (-not (Test-Path $f)) { throw "the bundler produced no $f" }
+            Copy-Item $f dist/
+          }
+
+          # A checksum beside each download, so a good one can be told from a damaged one.
+          Get-ChildItem dist -File | Where-Object { $_.Extension -ne '.sha256' } | ForEach-Object {
+            (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower() + "  " + $_.Name `
+              | Out-File -Encoding ascii ($_.FullName + ".sha256")
+          }
+          Get-ChildItem dist
+
+      # `gh` is preinstalled on the runner, so this needs no third-party action. The notes
+      # are built as an array rather than a here-string: a pwsh here-string has to close at
+      # column 0, which cannot happen inside a YAML block scalar.
+      - name: Publish
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = "${{ github.ref_name }}" -replace '^v', ''
+          $notes = @(
+            'An always-on-top status board for your Claude Code for VS Code sessions.',
+            '',
+            '**Windows 11.** Three ways to install it, and they differ only in packaging:',
+            '',
+            ("- **" + "mcv-board_${version}_x64-setup.exe** -- the ordinary installer. No"),
+            '  administrator needed; it installs for your account only.',
+            ("- **" + "mcv-board_${version}_x64_en-US.msi** -- the same thing as an MSI, for"),
+            '  machines that are centrally managed.',
+            ("- **" + "mcv-board-$version-windows-x64.zip** -- unpack it anywhere and run"),
+            '  `mcv-board.exe`. Keep `mcv-hook.exe` in the same folder: the board looks for the',
+            '  helper beside its own executable, and the optional exact-mode setup cannot',
+            '  install without it. The installers take care of this themselves.',
+            '',
+            'Windows will warn that the publisher is unknown -- these are not code-signed.',
+            '',
+            'Run it, then right-click the board for the menu. The README says what the statuses',
+            'mean, and what to do when a click does not raise the window you expected.',
+            '',
+            'Each download has a `.sha256` beside it.'
+          ) -join "`n"
+          Set-Content -Path release-notes.md -Value $notes -Encoding utf8
+          gh release create "${{ github.ref_name }}" `
+            (Get-ChildItem dist -File | ForEach-Object { $_.FullName }) `
+            --title "v$version" `
+            --notes-file release-notes.md

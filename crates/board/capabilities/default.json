@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The three built-in commands the two windows actually call. Tauri v2 denies every core command that no capability grants, and a denied command fails in the front end where nothing is watching: without core:event:allow-listen the board renders once from current_board and never hears another word, and without core:window:allow-start-dragging the window cannot be moved. Commands this product defines itself (current_board, toggle_fold, raise_session, the hook setup ones) need no entry here — they are allowed by being registered.",
+  "windows": ["board", "hook-setup"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "core:window:allow-start-dragging"
+  ]
+}

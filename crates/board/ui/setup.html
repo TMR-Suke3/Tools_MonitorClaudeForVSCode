@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Make waiting for you exact</title>
+    <link rel="stylesheet" href="setup.css" />
+  </head>
+  <body>
+    <!--
+      The hook setup, as `docs/hook-setup.md` §4 lays it out. One window, five steps, and the
+      user can leave at any of them.
+
+      Two rules shape the whole thing and are worth stating here, because they are easy to
+      erode one convenience at a time:
+
+        1. Nothing is written before the preview has been seen (FR-43). The button that
+           writes is the *only* button that writes, and it lives on the preview step.
+        2. Success is not claimed on a successful write (FR-50). The last step waits for a
+           real event and says plainly if none arrives.
+    -->
+    <main id="setup">
+      <!--
+        Which mode the board is in right now, above every step and never hidden (FR-55).
+
+        It is a fact about the machine, not about the step the user is on, so it sits outside
+        the steps rather than being repeated inside three of them. Stated in what the user
+        gets — the words this window uses everywhere else — with the machinery only in the
+        parenthesis, and read from the same two facts the board reads: whether the entries
+        are there, and whether anything has reported in lately.
+      -->
+      <p class="mode" id="mode-line" hidden></p>
+
+      <!-- Step 2 — what this is, in the user's terms, with no JSON in sight (FR-41). -->
+      <section class="step" data-step="explain" hidden>
+        <h1>Make <em>waiting for you</em> exact</h1>
+
+        <h2>What you get</h2>
+        <p>
+          The board knows the moment Claude asks you something, instead of working it out
+          from a pause. It also knows when a session ended normally — so closing a window is
+          never reported as a crash.
+        </p>
+
+        <h2>What it costs</h2>
+        <p>
+          <strong>Five entries</strong> are added to your Claude Code settings file, one for
+          each moment this app needs to hear about: a session starting, you sending a
+          message, Claude asking you something, a reply finishing, and the session ending.
+        </p>
+        <p>
+          Each entry runs a small program that came with this app, for a few milliseconds,
+          which writes a timestamp to a file on this computer. It never reads your
+          conversation and never connects to the internet.
+        </p>
+
+        <h2>Undo</h2>
+        <p>One click, any time. A backup is made first, and you are shown where it is.</p>
+
+        <footer>
+          <button data-action="preview" class="primary">Show me the exact change</button>
+          <button data-action="cancel">Cancel</button>
+        </footer>
+      </section>
+
+      <!-- Step 3 — the change itself, before it is made. -->
+      <section class="step" data-step="preview" hidden>
+        <h1>The exact change</h1>
+        <h2>The file being changed</h2>
+        <p class="path"><code id="settings-path"></code></p>
+
+        <!--
+          The diff is shown, rather than a description of it: FR-43's later form. What it
+          proves is the part a description cannot — that nothing is removed or reordered.
+
+          The line above it says the same thing in words, counted from the diff itself. A
+          diff proves "nothing is removed" only to a reader who knows that a removal would
+          have been marked, and that is not everybody this screen is for.
+        -->
+        <p class="tally" id="diff-tally"></p>
+        <pre id="diff" class="diff" aria-label="the change, line by line"></pre>
+
+        <p id="reformat-warning" class="warning" hidden>
+          Your settings file is not laid out the way this app writes JSON — the indentation,
+          the line endings, or the spacing differ. Saving will rewrite the whole file in this
+          app's layout. Nothing else about it changes: every setting keeps its value and its
+          position.
+        </p>
+
+        <footer>
+          <button data-action="install" class="primary">Make this change</button>
+          <button data-action="back">Back</button>
+        </footer>
+      </section>
+
+      <!-- Step 5 — proof, which is the only thing that counts as success (FR-50). -->
+      <section class="step" data-step="verify" hidden>
+        <h1>Nearly there</h1>
+        <p class="backup" id="backup-line"></p>
+        <p>
+          Open any Claude Code session and send a message. This window is waiting to hear
+          about it.
+        </p>
+
+        <p class="waiting" id="waiting-line"><span class="spinner" aria-hidden="true"></span> Waiting for the first event…</p>
+
+        <footer id="verify-actions" hidden>
+          <button data-action="undo">Undo the change</button>
+          <button data-action="keep">Keep it and check later</button>
+        </footer>
+      </section>
+
+      <!--
+        The end of the happy path — and it says only what is true today. What is true today
+        changed with `feat/exact-mode`: the board now derives status from these events, so
+        the sentence that said it did not has gone rather than been softened.
+      -->
+      <section class="step" data-step="done" hidden>
+        <h1>✅ Received</h1>
+        <p>
+          Your sessions are reporting in. Nothing further is needed from you, and nothing
+          else on this computer changed.
+        </p>
+        <p>
+          <em>Waiting for you</em> is now exact: the board is told the moment Claude asks you
+          something, instead of working it out from a pause. If the reports ever stop
+          arriving, it goes back to working it out and says so — it will not keep claiming to
+          be exact.
+        </p>
+        <p>To take the entries out again, right-click the board and open this window.</p>
+        <p class="backup" id="done-backup-line"></p>
+        <footer>
+          <button data-action="close" class="primary">Close</button>
+        </footer>
+      </section>
+
+      <!--
+        The diagnosis (FR-55's second half, `docs/hook-setup.md` §5). Reached from the board's
+        menu, and here rather than in a window of its own because this is where every other
+        question about hook mode is already answered — the theme, the steps and the repairs
+        are all in this file (ADR-0026).
+
+        The rows are built in `setup.js` from what Rust decides. Nothing about which
+        precondition holds, or what repairs it, is worked out on this side: the rule that
+        shapes the whole window is that the front end paints answers.
+      -->
+      <section class="step" data-step="diagnose" hidden>
+        <h1>Is anything reporting in?</h1>
+        <p class="lede">
+          What <em>waiting for you</em> being exact depends on. Each one that does not hold
+          carries the single thing that repairs it.
+        </p>
+        <ol class="checks" id="checks"></ol>
+        <footer>
+          <button data-action="recheck">Check again</button>
+          <button data-action="close" class="primary">Close</button>
+        </footer>
+      </section>
+
+      <!--
+        Opening the clicked session's own tab (ADR-0029). Off unless the user turns it on,
+        and this is where they are told what they are turning on — including the part that
+        can go wrong, which is stated before the button rather than discovered afterwards.
+      -->
+      <section class="step" data-step="reveal" hidden>
+        <h1>Open the session's tab too</h1>
+
+        <h2>What you get</h2>
+        <p>
+          Clicking a session on the board brings its editor window forward. With this on, it
+          also brings <strong>that session's own tab</strong> to the front and puts the cursor
+          in its message box — so a click takes you to the session, not just to the window it
+          is in.
+        </p>
+
+        <h2>What it costs</h2>
+        <p>
+          The board asks your editor to open a link naming the session. <strong>Your editor
+          decides which of its windows answers</strong>, and the board cannot tell it — so the
+          link is sent only in the moment after the right window has come forward, and only
+          when that session belongs to that window's folder.
+        </p>
+        <p class="warning">
+          If it still reaches the wrong window, the session opens as a second tab there.
+          Nothing is lost and nothing is closed, but you may have to close it again. This is
+          the whole risk, and it is why this is off until you ask for it.
+        </p>
+        <p>
+          The window comes forward first and the tab follows a moment later. That gap is your
+          editor starting the program that carries the link, and the board cannot shorten it.
+        </p>
+        <p>
+          Your editor will ask your permission the first time. That prompt is the real
+          switch — it has a <em>don't ask again</em> box, and you can withdraw it in your
+          editor at any time. This app writes nothing to your editor's settings.
+        </p>
+
+        <footer>
+          <button data-action="reveal-on" class="primary">Turn it on</button>
+          <button data-action="cancel">Cancel</button>
+        </footer>
+      </section>
+
+      <!-- Already on: the way out, which needs no persuading. -->
+      <section class="step" data-step="reveal-on" hidden>
+        <h1>✅ On</h1>
+        <p>
+          Clicking a session now opens that session's tab and puts the cursor in its message
+          box, as well as bringing its window forward.
+        </p>
+        <p>
+          The first click will make your editor ask permission. Tick <em>don't ask again</em>
+          if you would rather not be asked each time.
+        </p>
+        <p>To stop, turn it off here or untick it in the board's menu.</p>
+        <footer>
+          <button data-action="reveal-off">Turn it off</button>
+          <button data-action="close" class="primary">Close</button>
+        </footer>
+      </section>
+
+      <!--
+        Changing the two global shortcuts (FR-61). The keys this product picked cannot be the
+        last word: the machine was somebody's before it was ours, and a key that is already
+        spoken for is a choice to undo rather than a fault to report.
+      -->
+      <section class="step" data-step="shortcuts" hidden>
+        <h1>Change the keys</h1>
+        <p>
+          These two work while any other program has the keyboard. If something else on this
+          computer already uses one of them, it will not reach the board — change it here, or
+          clear it if you would rather not have it at all.
+        </p>
+
+        <ul class="keys">
+          <li>
+            <span class="what">Bring the board to me</span>
+            <button class="key" data-action="capture" data-key="summon" id="key-summon"></button>
+            <button class="plain" data-action="clear" data-key="summon">Clear</button>
+            <p class="verdict" id="verdict-summon"></p>
+          </li>
+          <li>
+            <span class="what">Show or hide</span>
+            <button class="key" data-action="capture" data-key="toggle" id="key-toggle"></button>
+            <button class="plain" data-action="clear" data-key="toggle">Clear</button>
+            <p class="verdict" id="verdict-toggle"></p>
+          </li>
+        </ul>
+
+        <p class="hint">
+          Click a key, then press the combination you want. It needs at least one of
+          <kbd>Ctrl</kbd>, <kbd>Alt</kbd>, <kbd>Shift</kbd> or <kbd>Win</kbd> — a key on its
+          own would be taken from every other program on this computer.
+        </p>
+        <p class="hint">
+          The board cannot tell whether a key is free until it asks for it, so what you see
+          under each key is what the operating system answered.
+        </p>
+
+        <footer>
+          <button data-action="save-keys" class="primary">Use these keys</button>
+          <button data-action="close">Close</button>
+        </footer>
+      </section>
+
+      <!-- Removal, which never depends on the backup existing (FR-51). -->
+      <section class="step" data-step="remove" hidden>
+        <h1>Remove the entries</h1>
+        <p>
+          The five entries this app added are taken out. Any other hooks you have are left
+          exactly where they are. A backup is made first.
+        </p>
+        <p class="tally" id="remove-tally"></p>
+        <pre id="remove-diff" class="diff" aria-label="the change, line by line"></pre>
+        <footer>
+          <button data-action="do-remove" class="primary">Remove them</button>
+          <button data-action="cancel">Cancel</button>
+        </footer>
+      </section>
+
+      <!--
+        The refusal (FR-53). Not an error dialog: the product declined to write, the file is
+        as it was, and the one useful action is to open it.
+      -->
+      <section class="step" data-step="refused" hidden>
+        <h1>Nothing was changed</h1>
+        <p id="refusal-reason"></p>
+        <h2>The file</h2>
+        <p class="path"><code id="refusal-path"></code></p>
+        <p>
+          This app will not write over a settings file it cannot read — that file may be
+          half-edited right now, and overwriting it would lose the edit.
+        </p>
+        <footer>
+          <button data-action="open-settings" class="primary">Open the file</button>
+          <button data-action="retry">Try again</button>
+          <button data-action="cancel">Cancel</button>
+        </footer>
+      </section>
+    </main>
+    <script src="setup.js"></script>
+  </body>
+</html>

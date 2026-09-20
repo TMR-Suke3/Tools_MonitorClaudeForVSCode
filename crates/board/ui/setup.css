@@ -1,0 +1,455 @@
+/*
+  The setup window.
+
+  Not the board: this is a normal window, read once, at reading size — so it takes the
+  board's colours (docs/ui-overlay.md §3.2, passed in at runtime like everywhere else) but
+  none of its 11 px density. A screen asking permission to edit a file the user owns is the
+  last place to be economical with space.
+*/
+
+:root {
+  --font-stack: ui-sans-serif, "Segoe UI Variable Text", "Segoe UI", "Yu Gothic UI",
+    "Meiryo", system-ui, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", "Consolas", "Yu Gothic UI", monospace;
+
+  /* Filled in from the palette at runtime; the stylesheet holds no colours of its own. */
+  --board: #15181e;
+  --hairline: #2a2f38;
+  --text: #c9cfd8;
+  --secondary: #818a98;
+  --added: #08c5bd;    /* the working teal: the colour of something being done */
+  --removed: #f2a33c;  /* the attention amber: the colour of something to look at */
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  background: var(--board);
+  color: var(--text);
+  font: 13px / 1.55 var(--font-stack);
+  height: 100%;
+  /* The window does not scroll; the diff inside it does. Otherwise focusing the button at
+     the bottom of a long change scrolls the heading and the file path off the top — which
+     removes the two things the user needs in order to read the diff. */
+  overflow: hidden;
+}
+
+/*
+  A column that fills the window, so the buttons sit at the bottom of it and the diff takes
+  whatever is left. A fixed-height pane in a resizable window leaves a band of empty board
+  under the buttons at one size and a cramped, scrolling diff at another.
+*/
+#setup {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 20px 22px 18px;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+h1 {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
+  margin-bottom: 12px;
+}
+
+h1 em {
+  font-style: normal;
+  /* The board's own word for the state this makes exact. */
+  color: var(--added);
+}
+
+h2 {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--secondary);
+  margin: 16px 0 4px;
+}
+
+p {
+  margin-bottom: 8px;
+  max-width: 62ch;
+}
+
+strong {
+  font-weight: 600;
+  color: #fff;
+}
+
+code {
+  font: 12px / 1.4 var(--font-mono);
+  color: var(--secondary);
+  overflow-wrap: anywhere;
+}
+
+.path {
+  color: var(--secondary);
+  margin-bottom: 2px;
+}
+
+/* The path is long enough to wrap, and wrapping it after the word "In" reads as a fault.
+   It gets its own line instead. */
+.path code {
+  display: block;
+  margin-top: 2px;
+}
+
+/*
+  The diff. Scrolls inside itself rather than stretching the window: a settings file with a
+  lot in it must not push the buttons off the bottom, because the buttons are the consent.
+*/
+.diff {
+  font: 12px / 1.45 var(--font-mono);
+  background: color-mix(in srgb, var(--board) 84%, #fff 16%);
+  border: 1px solid var(--hairline);
+  border-radius: 4px;
+  padding: 10px 12px 16px;
+  margin: 6px 0 12px;
+  /* Takes the room the window has, and scrolls inside itself when the change is long.
+     A basis of 0 rather than auto: with `auto` a long change sizes the pane to its content
+     and pushes the rest of the window off the bottom. */
+  flex: 1 1 0;
+  min-height: 120px;
+  overflow: auto;
+  /* Wrapped, not scrolled sideways. The longest line in this diff is the command — the one
+     line saying which program will be run on the user's machine — and a horizontal
+     scrollbar is a good way for that to go unread. The hanging indent keeps a wrapped line
+     visibly subordinate to the one it belongs to. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  /* Dark, like everything else here: the platform's default is a white track, and a bright
+     bar down the side of a dark pane is the first thing the eye goes to. */
+  scrollbar-color: var(--secondary) transparent;
+  scrollbar-width: thin;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* The hanging indent, applied per line: a line too long for the pane wraps under itself
+   rather than back to the margin, where it would read as a line of its own — one without the
+   + or - that says what it is. */
+.diff > div {
+  padding-left: 2.5em;
+  text-indent: -2.5em;
+}
+
+.diff .add {
+  color: var(--added);
+}
+
+.diff .del {
+  color: var(--removed);
+}
+
+.diff .same {
+  color: var(--secondary);
+}
+
+/* The change in words, above the change itself. */
+.tally {
+  color: var(--text);
+  margin: 10px 0 0;
+}
+
+.tally strong {
+  color: var(--added);
+}
+
+.tally strong.removed {
+  color: var(--removed);
+}
+
+/*
+  The mode line. Quiet on purpose: it is standing information rather than an alert, and
+  `session-state-model.md` §4.1 asks for the product to say when hooks are off "once,
+  discreetly, not as a nag".
+*/
+.mode {
+  flex: 0 0 auto;
+  margin: 0 0 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--hairline);
+  color: var(--secondary);
+}
+
+.mode strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Installed and silent is the one state worth a colour: it is the case where what the user
+   set up has stopped working, and nothing else in the window would tell them. */
+.mode[data-mode="went-quiet"] strong {
+  color: var(--removed);
+}
+
+.warning {
+  border-left: 3px solid var(--removed);
+  padding-left: 10px;
+  color: var(--text);
+}
+
+/*
+  The diagnosis (docs/hook-setup.md §5). One row per precondition, and at most one control
+  per row: the requirement is "the single action that repairs it", and a row with two
+  buttons has already stopped being that.
+*/
+.lede {
+  color: var(--secondary);
+  margin-bottom: 6px;
+}
+
+.checks {
+  list-style: none;
+  /* Takes what is left and scrolls inside itself, so four rows with long paths in them
+     cannot push the buttons off the bottom — the same rule the diff pane follows. The four
+     healthy rows fit without scrolling; it is a broken one, which says more, that needs it. */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0 -4px;
+  padding: 4px;
+  /* Dark, like the diff pane: the platform's default is a white track, and a bright bar down
+     the side of a dark panel is the first thing the eye goes to — which is the opposite of
+     what this panel wants looked at. */
+  scrollbar-color: var(--secondary) transparent;
+  scrollbar-width: thin;
+}
+
+.check {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 2px 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.check:last-child {
+  border-bottom: 0;
+}
+
+/*
+  The mark is a second channel, never the only one: the row's own words say what is true, so
+  a reader who cannot separate the two colours loses nothing. Same rule as the board's
+  palette (ui-overlay.md §8), for the same reason.
+*/
+.check .mark {
+  grid-row: 1 / span 3;
+  font-size: 13px;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.check[data-ok="true"] .mark {
+  color: var(--added);
+}
+
+.check[data-ok="false"] .mark {
+  color: var(--removed);
+}
+
+.check .what {
+  font-weight: 600;
+}
+
+.check .detail {
+  color: var(--secondary);
+  /* A settings path has no spaces to break at and is longer than this window. */
+  overflow-wrap: anywhere;
+}
+
+.check .fix {
+  margin-top: 8px;
+}
+
+/* The case where the product cannot act. A sentence, because a button that could only
+   report its own failure would be worse than saying so. */
+.check .fix.tell {
+  margin-top: 4px;
+  color: var(--text);
+  border-left: 3px solid var(--removed);
+  padding-left: 10px;
+}
+
+.check .fix button {
+  padding: 6px 12px;
+}
+
+/*
+  The two shortcuts, one row each: what it does, the key itself, and the way to clear it — with
+  the verdict on its own line underneath, because the verdict is a sentence and the row above
+  it is three short things.
+*/
+.keys {
+  list-style: none;
+  margin: 4px 0 12px;
+  padding: 0;
+}
+
+.keys li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.keys li:last-child {
+  border-bottom: 0;
+}
+
+.keys .what {
+  font-weight: 600;
+}
+
+/* The key is the thing being changed, so it is the thing that looks pressable and holds the
+   width while the label inside it changes from a chord to "press a combination…". */
+.keys .key {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  min-width: 190px;
+  text-align: center;
+}
+
+.keys .plain {
+  color: var(--secondary);
+}
+
+.keys .verdict {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--secondary);
+}
+
+.hint {
+  color: var(--secondary);
+}
+
+.hint kbd {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  border: 1px solid var(--hairline);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+/* Read by screen readers, so the state is not carried by the mark's colour alone. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.backup {
+  color: var(--secondary);
+}
+
+.waiting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 4px;
+}
+
+.waiting[data-state="late"] {
+  color: var(--removed);
+}
+
+.waiting[data-state="arrived"] {
+  color: var(--added);
+}
+
+/* The one animation here, and it means exactly what it looks like: still waiting. */
+.spinner {
+  width: 10px;
+  height: 10px;
+  border: 2px solid color-mix(in srgb, var(--added) 35%, transparent);
+  border-top-color: var(--added);
+  border-radius: 50%;
+  animation: spin 900ms linear infinite;
+}
+
+.waiting[data-state="late"] .spinner,
+.waiting[data-state="arrived"] .spinner {
+  display: none;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+/* Reduced motion loses the spin, not the information: the sentence says the same thing. */
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+    border-top-color: color-mix(in srgb, var(--added) 35%, transparent);
+  }
+}
+
+footer {
+  display: flex;
+  gap: 8px;
+  /* Pushed to the bottom of the column: the consent is where the eye finishes. */
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--hairline);
+}
+
+button {
+  font: 13px / 1 var(--font-stack);
+  color: var(--text);
+  background: color-mix(in srgb, var(--board) 80%, #fff 20%);
+  /* A visible edge, not the hairline: this is a dialog asking to change a file the user
+     owns, and the way to say no should not be the quieter of the two controls. */
+  border: 1px solid color-mix(in srgb, var(--secondary) 55%, transparent);
+  border-radius: 4px;
+  padding: 8px 14px;
+  cursor: default;
+}
+
+button:hover {
+  background: color-mix(in srgb, var(--board) 72%, #fff 28%);
+}
+
+button.primary {
+  background: var(--added);
+  border-color: var(--added);
+  /* Against the teal, which is a light colour in both themes. */
+  color: #05201f;
+  font-weight: 600;
+}
+
+button.primary:hover {
+  filter: brightness(1.08);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--added);
+  outline-offset: 2px;
+}
+
+button[disabled] {
+  opacity: 0.5;
+}
+
+.step[hidden] {
+  display: none;
+}

@@ -1,0 +1,101 @@
+{
+  "note": "Widths measured from 98 distinct real ai-titles; the text is synthesised to match each one's character count and cell width exactly. Rows with derived:true are NOT measured - see docs/test-plan.md.",
+  "measured_distribution": {
+    "distinct_titles": 98,
+    "with_east_asian_wide_chars": 82,
+    "chars": {
+      "min": 13,
+      "max": 59
+    },
+    "cells": {
+      "min": 18,
+      "max": 59
+    }
+  },
+  "titles": [
+    {
+      "title": "abcdefghあいうえお",
+      "chars": 13,
+      "cells": 18,
+      "derived": false
+    },
+    {
+      "title": "あいうえおかきくけこさしすせ",
+      "chars": 14,
+      "cells": 28,
+      "derived": false
+    },
+    {
+      "title": "abcあいうえおかきくけこさしすせそ",
+      "chars": 18,
+      "cells": 33,
+      "derived": false
+    },
+    {
+      "title": "あいうえおかきくけこさしすせそ設定画面",
+      "chars": 19,
+      "cells": 38,
+      "derived": false
+    },
+    {
+      "title": "あいうえおかきくけこさしすせそ設定画面表示",
+      "chars": 21,
+      "cells": 42,
+      "derived": false
+    },
+    {
+      "title": "abcdeあいうえおかきくけこさしすせそ設定画面表示確",
+      "chars": 27,
+      "cells": 49,
+      "derived": false
+    },
+    {
+      "title": "abc defghijkl mnopqrs tu vwx yza bcdefg hijklmn opqrstuvwxy",
+      "chars": 59,
+      "cells": 59,
+      "derived": false
+    },
+    {
+      "title": "family 👩‍👩‍👧 photo",
+      "note": "ZWJ emoji sequence - must not split",
+      "derived": true,
+      "chars": 18,
+      "cells": 21
+    },
+    {
+      "title": "café latte order",
+      "note": "combining acute - must not split from its base",
+      "derived": true,
+      "chars": 17,
+      "cells": 17
+    },
+    {
+      "title": "🖥️ monitor setup",
+      "note": "surrogate pair + variation selector",
+      "derived": true,
+      "chars": 16,
+      "cells": 16
+    },
+    {
+      "title": "한국어 제목 테스트",
+      "note": "Hangul - wide, non-Japanese",
+      "derived": true,
+      "chars": 10,
+      "cells": 18
+    },
+    {
+      "title": "مرحبا بالعالم",
+      "note": "RTL script",
+      "derived": true,
+      "chars": 13,
+      "cells": 13
+    },
+    {
+      "title": "",
+      "note": "empty title - the fallback chain must still produce something",
+      "derived": true,
+      "chars": 0,
+      "cells": 0
+    }
+  ]
+}

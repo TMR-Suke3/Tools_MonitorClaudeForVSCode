@@ -1,0 +1,52 @@
+[package]
+name = "mcv-board"
+description = "The always-on-top board. Not implemented yet; see docs/ui-overlay.md."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+mcv-core = { path = "../core" }
+# The view model crosses into the WebView as JSON, and what the board remembers between
+# runs is a small JSON file (FR-28).
+serde = { version = "1.0.229", features = ["derive"] }
+# `preserve_order`, and not by preference: the hook installer rewrites the user's
+# settings.json, and FR-45 forbids reordering anything it does not own. Without this
+# feature every key in that file comes back alphabetised.
+serde_json = { version = "1.0.151", features = ["preserve_order"] }
+# The process table, for the PID-reuse guard: a PID alone is not an identity, so the board
+# has to know when a process started. Cross-platform rather than raw Win32 so the probe can
+# be built and tested wherever CI runs, and cut down to the one feature that is used.
+sysinfo = { version = "0.36.1", default-features = false, features = ["system"] }
+# The window and the WebView. The board ships its own front end, so no asset
+# protocol and no extra permissions are enabled. `tray-icon` is not on by default and is
+# what FR-32 needs: the board can be hidden with a key, so it has to live somewhere that
+# does not depend on the user remembering that key.
+tauri = { version = "2.11.5", features = ["tray-icon"] }
+# Two keys that work while another application has focus: bring the board to the display the
+# mouse is on, and show or hide it. There is no way to listen for a key outside your own
+# window without the OS's own registration, and this is Tauri's binding for it. Used from Rust
+# only — the front end is never given the shortcut API.
+tauri-plugin-global-shortcut = "2.3.1"
+# One board per machine (FR-60). Two of them fight over the same settings file, put two
+# icons in the tray, and leave the second one unable to register the shortcuts the first
+# already holds — which reads as "the keys stopped working". The plugin is what makes a
+# second launch reach the board that is already running instead of starting another.
+tauri-plugin-single-instance = "2.4.4"
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dev-dependencies]
+serde_json = "1.0.151"
+
+# Only for TC-101, which needs a real maximised window to raise. The same crate the board
+# already uses on Windows, cut to the two feature groups the test calls into.
+[target."cfg(windows)".dev-dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+
+[target."cfg(windows)".dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_NetworkManagement_IpHelper", "Win32_Networking_WinSock", "Win32_System_Threading"] }

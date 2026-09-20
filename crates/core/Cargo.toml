@@ -1,0 +1,35 @@
+[package]
+name = "mcv-core"
+description = "Observation, parsing, the status state machine and title fitting. No OS-specific and no UI code (NFR-10)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+name = "mcv_core"
+
+# Four dependencies, and every one of them is a **format** library rather than a platform
+# one, so NFR-10 is untouched: nothing here can reach an OS API. That is the argument
+# ADR-0019 restated when the first two arrived, and it applies unchanged to the second two.
+#
+# All four are in the same category of work — reading a standard exactly. Hand-rolling any
+# of them fails on the cases the recordings deliberately carry: JSON escapes and lone
+# surrogates, or a ZWJ emoji sequence, a combining acute, a variation selector, Hangul and
+# RTL text.
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Grapheme-cluster boundaries (UAX #29) — where a title may be cut.
+unicode-segmentation = "1"
+# East Asian Width — how wide a title renders, which is not its character count.
+unicode-width = "0.2"
+
+[dev-dependencies]
+# The fixture helper unbundles session-registry.json, which packs seventeen registry files
+# into one document for convenience.
+serde_json = "1"
+# TC-33 walks the clusters of a title itself, to check that a cut never lands inside one.
+unicode-segmentation = "1"

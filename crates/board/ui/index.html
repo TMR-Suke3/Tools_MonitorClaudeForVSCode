@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Claude session board</title>
+    <link rel="stylesheet" href="board.css" />
+  </head>
+  <body>
+    <!--
+      A title line (28 px), then one list of three kinds of row, all 25 px tall
+      (ui-overlay.md §2):
+
+        .group          a workspace header — roll-up indicator, name, count, chevron
+        .session        a session inside an open group, indented 20 px
+        .merged         a workspace with exactly one session, drawn as one row (§2.3)
+
+      The whole body is the drag handle (FR-27) — the title line does not own that, it
+      *advertises* it. A window with no decorations gives the user nothing to aim at, and a
+      line that looks like a title bar is the cheapest way to say "grab here". The ☰ is where
+      the context menu will live (§6); until it exists, right-click opens the hook setup.
+    -->
+    <!--
+      The window is bigger than the panel, and the space around it is transparent (§2.7). That
+      is where the wave off an `awaiting_user` indicator goes: the board can draw outside
+      itself without the window having to be the size of the biggest thing it ever draws.
+    -->
+    <div id="panel">
+      <header id="titlebar">
+        <span class="handle">
+          <span class="burger" aria-hidden="true">☰</span>
+          <span class="product">Monitor your agents</span>
+        </span>
+      </header>
+      <main id="board" aria-label="Claude Code sessions"></main>
+    </div>
+    <script src="board.js"></script>
+  </body>
+</html>

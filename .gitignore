@@ -1,0 +1,129 @@
+# ============================================================
+#  .gitignore ベース（公開リポジトリ用）
+#  新規リポジトリの .gitignore にこの内容を貼ってから、
+#  言語固有の分を https://gitignore.io で足す
+# ============================================================
+
+# --- 秘密情報（最優先。絶対にコミットしない） -----------------
+# ※ ネガーション(!)は、除外行より後ろに書かないと効かない。
+#    また親ディレクトリごと除外していると ! は無効になる。
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.jks
+credentials.json
+client_secret*.json
+service-account*.json
+token*.json
+secrets/
+*.secret
+
+# SSH / パッケージレジストリ / クラウド CLI の認証情報
+id_rsa*
+id_ed25519*
+id_ecdsa*
+id_dsa*
+.npmrc
+.pypirc
+.netrc
+_netrc
+.aws/
+.azure/
+.gcloud/
+gha-creds-*.json
+
+# --- Claude Code -------------------------------------------
+.claude/settings.local.json
+.claude/**/*.local.*
+.claude/logs/
+.claude/transcripts/
+CLAUDE.local.md
+
+# --- ローカル専用のルール文書（自分用。公開しない） -----------
+# 「公開リポジトリ_ルールブック.md」などの個人運用ルールを
+# .notes/rules/ に置いて持ち歩く。日本語・社内固有ワードを含むので
+# 絶対に公開しないこと（.notes/ でも拾えるが、事故防止に明示しておく）
+.notes/rules/
+_rules/
+
+# --- 作業メモ・バイブコーディングの生ログ ---------------------
+.notes/
+scratch/
+_scratch/
+tmp/
+temp/
+draft/
+personal/
+private/
+TODO.local.md
+plan.local.md
+
+# --- 依存・ビルド成果物 --------------------------------------
+# ※ dist/ build/ out/ は、npm publish・GitHub Pages・バイナリ配布などで
+#    「成果物を意図的にコミットする」運用なら、この3行を削除すること。
+node_modules/
+.pnp.*
+dist/
+build/
+out/
+
+# Yarn Berry を使う場合は .yarn/ を丸ごと除外しない（releases/plugins はコミットする）
+.yarn/*
+!.yarn/releases/
+!.yarn/plugins/
+!.yarn/sdks/
+!.yarn/versions/
+.next/
+.nuxt/
+target/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# --- ログ・キャッシュ ---------------------------------------
+*.log
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.cache/
+coverage/
+.nyc_output/
+
+# --- エディタ・OS -------------------------------------------
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- 大きいファイル（Git LFS を使うなら除外を解除） -----------
+*.mp4
+*.mov
+*.zip
+*.7z
+*.psd
+*.blend
+*.fbx
+
+# --- Tauri の生成物 -----------------------------------------
+# crates/board/gen/ は tauri-build がビルドのたびに書き出す。中身は設定から
+# 決まるので、コミットしても情報は増えず、行末の差だけが毎回差分に出る。
+crates/board/gen/
+
+# The hook helper, staged for the bundler as a sidecar. A build artefact copied out of
+# target/, not a source file -- the release workflow puts it here from the build it just
+# made, so a stale committed copy could ship instead of the one that was tested.
+crates/board/binaries/

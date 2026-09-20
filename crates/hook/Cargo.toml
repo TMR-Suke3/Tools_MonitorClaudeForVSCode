@@ -1,0 +1,17 @@
+[package]
+name = "mcv-hook"
+description = "The hook helper invoked on Claude Code session events. Not implemented yet; see docs/hook-setup.md."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+# The payload arrives as JSON on standard input, and the line written out is JSON too. Both
+# are read through an allow-list of named fields, which is what keeps the conversation — the
+# `user_prompt` and `last_assistant_message` two of the five payloads carry — out of this
+# process entirely (NFR-07).
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"

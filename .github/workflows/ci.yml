@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    # C-1: the product targets Windows 11 (ADR-0002), so this is the platform the checks
+    # have to be green on. Nothing is cached yet because the workspace has no dependencies;
+    # add a cache step when it acquires one.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Show the toolchain
+        run: |
+          rustup show
+          cargo --version
+          cargo fmt --version
+          cargo clippy --version
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      # TC-48 … TC-54 live here: the palette of docs/ui-overlay.md §3.2, checked against
+      # the thresholds of §3.3 (docs/test-plan.md §7.1).
+      - name: Test
+        run: cargo test --workspace

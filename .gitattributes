@@ -1,0 +1,14 @@
+# Recorded fixtures are byte-exact input for the offset-based tailing tests
+# (NFR-02, TC-40/TC-41). Line endings must never be translated, or the byte
+# offsets differ between machines.
+tests/fixtures/*.jsonl text eol=lf
+tests/fixtures/*.json  text eol=lf
+
+# Documentation is plain text; keep it LF so diffs stay readable across platforms.
+*.md text eol=lf
+
+# Source and workflow files: LF everywhere, for the same reason as the documentation —
+# and so that `cargo fmt --check` sees the same bytes on every machine.
+*.rs   text eol=lf
+*.toml text eol=lf
+*.yml  text eol=lf

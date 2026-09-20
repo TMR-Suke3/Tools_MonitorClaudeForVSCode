@@ -1,0 +1,507 @@
+/*
+  The board, built from the numbers in docs/ui-overlay.md §2.
+
+  Every dimension below is one of that table's rows, named after it, so the specification and
+  the stylesheet can be read side by side. They are CSS px at 100 % scaling and scale with
+  the display, which is what FR-29 asks for — nothing here is a fixed device pixel.
+*/
+
+:root {
+  --row-height: 25px;          /* every row kind, §2 */
+  --pad-vertical: 5px;         /* 5 top, 5 bottom */
+  --pad-horizontal: 7px;
+  --indicator: calc(10px * var(--mark));   /* 15 across, and round — §3.1 */
+  --indicator-radius: 50%;     /* a circle, whatever the diameter is */
+  /*
+    A workspace's own mark, while its sessions are shown below it: 12 across, hollow. Two
+    differences rather than one — it is smaller *and* it is an outline — because the thing it
+    has to say is "this is the parent, the rows below are the sessions", and at these sizes a
+    single cue is easy to miss. The pair is a designed one (§3.1); it is not derived from the
+    disc, and changing one means choosing the other.
+  */
+  --parent-inset: 1.5px;       /* 15 - 2 x 1.5 = 12 across */
+  --parent-stroke: 2px;
+  /*
+    How much bigger than the 10 px cell everything is drawn.
+
+    The two shapes that are left — the wave's ring and `unknown`'s dotted one — are written as
+    the design's own figures, measured on that cell, times this. So is `--indicator` itself:
+    the size is derived from the scale rather than the other way round, because CSS cannot
+    divide one length by another and a comment claiming they were in step would have been the
+    only thing keeping them there.
+  */
+  --mark: 1.5;
+  --indent: 20px;              /* a session row: the child starts just past the parent */
+  --gap-indicator-text: 6px;
+  --gap-name-title: 7px;       /* merged row only */
+  --gap-text-column: 8px;
+  --chevron-column: 7px;
+  --chevron-clearance: 4px;
+
+  --title-height: 28px;        /* the title line, §2 */
+  --edge: 1px;                 /* the border, drawn inside the width */
+  --margin: 16px;              /* transparent space around the panel, §2.7 */
+  --panel-radius: 4px;
+
+  --font-size: 11px;           /* CJK has to render at this size without substitution, §4 */
+  --font-stack: ui-sans-serif, "Segoe UI Variable Text", "Segoe UI", "Yu Gothic UI",
+    "Meiryo", system-ui, sans-serif;
+
+  /* Filled in from the palette at runtime; the stylesheet holds no colours of its own. */
+  --board: #15181e;
+  --hairline: #2a2f38;
+  --text: #c9cfd8;
+  --secondary: #818a98;
+
+  /*
+    The outline and the title line — filled in from the palette like the four above.
+
+    The fill cannot do this job: `idle` sits at 3.31:1 against `--board`, which is the 3:1
+    floor plus rounding (ADR-0013, TC-48), so lightening the panel to separate it from the
+    editor behind it would drop the faintest status through that floor. The separation is all
+    in the edge — and none of it is a status colour, because teal, amber, violet and crimson
+    each mean something here, and spending one on decoration is how a status indicator stops
+    being read as one.
+  */
+  --edge-colour: #55606f;
+  --titlebar: #232936;
+  --titlebar-hairline: #313949;
+  /*
+    The top edge, lit from above. A lighting effect rather than a colour, which is why it is
+    the one chrome value the stylesheet keeps: it is white at low alpha over whatever the edge
+    already is, and on the light theme it lands on a light edge and does nothing, which is
+    correct — a panel darker than its background needs no highlight to look raised
+    ([ADR-0018](../../../docs/adr/0018-the-loud-end-is-a-dark-theme-property.md) makes the
+    same distinction for the palette).
+  */
+  --edge-lit: rgba(255, 255, 255, 0.34);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/*
+  The window is transparent and the panel is drawn inside it, one `--margin` in on every side
+  (§2.7). The wave off an `awaiting_user` indicator lands in that gap instead of being clipped
+  at the window edge.
+*/
+html,
+body {
+  height: 100%;
+  background: transparent;
+}
+
+body {
+  padding: var(--margin);
+  color: var(--text);
+  /*
+    Inspection only, and applied here rather than on the rows: at a zoom the panel's border,
+    its corners and the transparent margin have to grow with the rows, or the picture being
+    inspected is not the board at a larger size — it is a large board in small-board chrome.
+    Zooming the list alone is what it used to do.
+
+    This is not the DPI mechanism. CSS pixels already scale with the display, and the window
+    is sized in physical pixels from the same numbers (`app::fit`).
+  */
+  zoom: var(--zoom, 1);
+  font: var(--font-size) / 1 var(--font-stack);
+  overflow: hidden;
+  /* The whole background is the drag handle: press and move anywhere (FR-27, TC-65). */
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+
+/*
+  The board as the user sees it. The border is the whole of the window's outline — there are
+  no decorations, and there is no shadow: not the platform's, which a transparent window has
+  no frame to hang one on, and not one of the panel's own
+  ([ADR-0034](../../../docs/adr/0034-the-board-casts-no-shadow.md)). A drop shadow here is a
+  soft grey rectangle standing off the panel in the transparent margin, and over a light
+  editor that halo is more visible than the board it belongs to. The edge does the separating
+  (§2.6).
+*/
+#panel {
+  height: 100%;
+  background: var(--board);
+  border: var(--edge) solid var(--edge-colour);
+  border-top-color: var(--edge-lit);
+  border-radius: var(--panel-radius);
+  /*
+    **Not** `overflow: hidden`. The panel's corners are rounded and the title strip is the only
+    thing with a fill of its own that could square them off, so the strip rounds its own two
+    corners instead — because the one thing that deliberately overflows this panel is the wave
+    off an `awaiting_user` indicator, and clipping the panel clips the wave at the very edge it
+    is supposed to cross.
+  */
+}
+
+/*
+  The title line. It is the drag affordance, not a heading: FR-27 makes the whole body
+  draggable and nothing on screen said so.
+*/
+#titlebar {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  height: var(--title-height);
+  /* The panel does not clip, so the strip follows the panel's corners itself. */
+  border-radius: calc(var(--panel-radius) - var(--edge)) calc(var(--panel-radius) - var(--edge))
+    0 0;
+  padding: 0 var(--pad-horizontal);
+  background: var(--titlebar);
+  border-bottom: 1px solid var(--titlebar-hairline);
+  color: var(--text);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/*
+  One inline box around the whole label, so its natural width can be measured: a folded board
+  narrows to its content (§2.5), and the title is content too — the narrowest the board may be
+  is now whichever is wider, the longest workspace name or this.
+*/
+#titlebar .handle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#titlebar .burger {
+  font-size: 13px;
+  line-height: 1;
+}
+
+/*
+  The pointer is the other half of the affordance. The whole body drags (FR-27), but only this
+  strip advertises it — a row shows a grab cursor nowhere, because a row is something you
+  click to raise a window, and two meanings under one pointer is worse than one implicit one.
+*/
+#titlebar {
+  cursor: grab;
+}
+
+#titlebar:active {
+  cursor: grabbing;
+}
+
+#board {
+  padding: var(--pad-vertical) var(--pad-horizontal);
+}
+
+/*
+  A frozen board. Used for screenshots, where an animation caught mid-cycle makes two
+  pictures of the same board differ — and used to look at what reduced motion leaves
+  behind, which §3.1 requires to carry the same information.
+*/
+[data-motion="still"] .indicator,
+[data-motion="still"] .indicator::after {
+  animation: none !important;
+}
+
+/* ------------------------------------------------------------------ rows */
+
+.row {
+  display: flex;
+  align-items: center;
+  height: var(--row-height);
+  white-space: nowrap;
+}
+
+/*
+  No rule between rows. The design's own drawings have none — board-mixed.svg contains no
+  line element and never uses the hairline colour — and on a board this dense a rule every
+  20 px is more chrome than the rows it separates. The hairline exists in the palette for
+  edges that need one, not for rhythm.
+*/
+
+.row.session {
+  padding-left: var(--indent);
+}
+
+/*
+  The whole row is the hit area — 300 x 20, which is 6000 px² for a 10 px indicator (§6).
+  Nothing here asks the user to hit a 10 px square.
+*/
+.row {
+  cursor: default;
+}
+
+/* ------------------------------------------------------------------ indicator */
+
+.indicator {
+  flex: 0 0 auto;
+  width: var(--indicator);
+  height: var(--indicator);
+  margin-right: var(--gap-indicator-text);
+  border-radius: var(--indicator-radius);
+  background: var(--status);
+  position: relative;
+}
+
+/* working — a solid chip at full strength, and still (ADR-0021). */
+.indicator.filled {
+  background: var(--status);
+}
+
+/*
+  awaiting_user — the chip **plus** a halo, the only status with one.
+
+  The measurements are the design's own: docs/images/indicator-states.svg draws a 14 x 14
+  ring at 1 px and 55 % opacity around the 10 x 10 chip, so the halo sits 2 px out. An
+  earlier version used a 2 px ring 3 px out at full opacity, which read as a hollow amber
+  square — the chip vanished behind its own halo, and the loudest mark on the board became
+  the one that looked like an outline state.
+*/
+/*
+  The wave. It starts on the disc and travels outward, past the edge of the panel and into the
+  transparent margin around it (§2.7) — which is the point: the one status that means the
+  developer has to move is the one thing on this board allowed to leave it.
+
+  `transform` and `opacity` only, so the whole animation is composited and never asks for
+  layout. The ring is drawn at the disc's own size and scaled up; its stroke thickens as it
+  goes, which is invisible because by then it has faded to nothing.
+*/
+.indicator.halo-expand::after,
+.indicator.halo-still::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--indicator-radius);
+  border: calc(1.5px * var(--mark)) solid var(--status);
+  opacity: 0.75;
+  /*
+    The still rendering is this ring, sitting just off the disc — §3.1's reduced-motion column.
+    The gap matters: a ring touching the disc merges with it into one amber blob and the
+    silhouette stops being readable without colour, which is the channel FR-17 leans on.
+  */
+  transform: scale(1.25);
+}
+
+/*
+  unknown — a dotted ring, and the least ink of all six, because a fallback must not read as
+  an alarm. The design's is 8.8 x 8.8 at 1.2 px, so it too is inset from the cell.
+*/
+.indicator.dotted {
+  background: transparent;
+}
+.indicator.dotted::after {
+  content: "";
+  position: absolute;
+  inset: calc(0.6px * var(--mark));
+  border: calc(1.2px * var(--mark)) dashed var(--status);
+  border-radius: var(--indicator-radius);
+}
+
+/* ------------------------------------------------------------------ motion */
+
+.indicator.blink {
+  /* 1.2 s for the first six seconds, then static: blinking is rationed to the two statuses
+     that mean the developer has to move. */
+  animation: blink 1.2s steps(2, jump-none) 0s 5;
+}
+.indicator.halo-expand::after {
+  animation: halo 1.4s cubic-bezier(0.16, 0.7, 0.35, 1) infinite;
+}
+
+/*
+  An open workspace's own mark: the same colour, drawn as an outline.
+
+  The shape says *parent*, not *which status* — the view model decides it (`view.rs`), because
+  it is a fact about the row rather than about the session. While the group is open its
+  sessions are drawn immediately below, and two solid marks a row apart are read as two things
+  needing attention where there is one. A folded workspace keeps the solid mark, because there
+  it is the only evidence there is (FR-18).
+*/
+.indicator.hollow {
+  background: transparent;
+}
+
+.indicator.hollow::before {
+  content: "";
+  position: absolute;
+  inset: var(--parent-inset);
+  border: var(--parent-stroke) solid var(--status);
+  border-radius: var(--indicator-radius);
+}
+
+/* ...and it does not send the wave either: the row below is the one to go to. */
+.indicator.hollow.halo-expand::after {
+  animation: none;
+}
+
+@keyframes blink {
+  50% { opacity: 0.15; }
+}
+/*
+  A wave, not a wash.
+
+  The stroke thins as the ring travels, which is the difference between a ripple and a
+  smudge: scaling a fixed border alone made the ring *thicker* the further out it went, and at
+  low opacity over a dark panel that reads as a dark diffuse halo — a shadow, or a rendering
+  fault, rather than a signal. So the border width is animated against the scale, and the ring
+  keeps roughly the weight it started with.
+
+  It is also brightest while it is small and near the disc, and gone before it is large, so
+  what the eye catches is a bright edge leaving the mark rather than a big faint circle
+  hanging around it.
+*/
+@keyframes halo {
+  0% {
+    transform: scale(1.25);
+    border-width: calc(1.5px * var(--mark));
+    opacity: 0.9;
+  }
+  45% {
+    opacity: 0.4;
+  }
+  100% {
+    transform: scale(3);
+    border-width: calc(0.5px * var(--mark));
+    opacity: 0;
+  }
+}
+
+/*
+  Reduced motion turns the movement off and leaves everything else.
+
+  It used to be able to claim more than that: each status had a silhouette, so the shapes
+  carried the board with the motion gone. Since FR-17 was amended the separation is the
+  palette's, measured under greyscale and three colour-vision simulations (TC-49 … TC-51) —
+  which holds with or without motion, because it never depended on it. `awaiting_user` keeps
+  its wave drawn static on the disc, so the mark that summons is still the largest one here.
+*/
+@media (prefers-reduced-motion: reduce) {
+  .indicator,
+  .indicator::after {
+    animation: none !important;
+  }
+}
+
+/*
+  The flash that answers "where is it?" — one pulse of the edge when the board is summoned by
+  its shortcut (`hotkeys.rs`).
+
+  On the panel rather than on a row, because the question it answers is about the window: the
+  user pressed a key while looking somewhere else on a large screen, and something has just
+  arrived that they now have to find. It runs once and is over.
+*/
+#panel.flash {
+  animation: found 0.9s ease-out 2;
+}
+
+@keyframes found {
+  0% {
+    border-color: var(--edge-colour);
+    /*
+      A ring that swells out of the edge and is gone — so the frames at either end are a ring
+      of no width rather than `none`. The panel has no resting shadow to return to, and
+      animating from `none` steps rather than grows.
+    */
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+  }
+  35% {
+    border-color: var(--text);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.22);
+  }
+  100% {
+    border-color: var(--edge-colour);
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+  }
+}
+
+/* ------------------------------------------------------ what a click did */
+
+/*
+  A raise that worked: a ring, for 150 ms. Drawn outside the indicator so the mark itself
+  does not move — the board must not twitch because someone clicked it.
+*/
+.indicator.raise-worked {
+  box-shadow: 0 0 0 2px var(--text);
+}
+
+/*
+  A raise that did not: the hollow outline, for two seconds, with the reason on hover. This
+  is the case a silent no-op would fail (TC-75) — the user is looking at an editor that never
+  came forward, and the board is the only thing that can say why.
+*/
+.indicator.raise-failed {
+  box-shadow: 0 0 0 2px var(--secondary);
+  opacity: 0.6;
+}
+
+/* ------------------------------------------------------------------ text */
+
+.name {
+  color: var(--text);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/*
+  Two fittings, and both are needed.
+
+  The core fits a title to a budget in cells (§4), which is what makes truncation testable
+  and keeps a title from arriving absurdly long. But the board's font is proportional and §2
+  is written in pixels, so how much room is actually left on a row — after a folder name of
+  unknown width — is something only the renderer knows. The browser does that last fit, and
+  it marks the cut, because a title clipped with no ellipsis reads as a title that happens to
+  end there.
+*/
+.title {
+  text-overflow: ellipsis;
+}
+
+.row.group .name {
+  flex: 1 1 auto;
+}
+
+.row.merged .name {
+  flex: 0 0 auto;
+  margin-right: var(--gap-name-title);
+}
+
+.row.session .title {
+  flex: 1 1 auto;
+  color: var(--text);
+  overflow: hidden;
+}
+
+/*
+  On a merged row the title is the secondary colour (§2.4). The row carries a folder name and
+  a session title side by side, and without the difference in weight and colour they read as
+  one run of text — which is what makes a merged row look like a session row rather than a
+  workspace.
+*/
+.row.merged .title {
+  flex: 1 1 auto;
+  color: var(--secondary);
+  overflow: hidden;
+}
+
+/* The right-hand column is content-width and right-aligned: a count, or a time. It is not a
+   reserved 34 px sized for the widest thing it could ever hold (§2). */
+.column {
+  flex: 0 0 auto;
+  margin-left: var(--gap-text-column);
+  color: var(--secondary);
+  text-align: right;
+}
+
+.chevron {
+  flex: 0 0 auto;
+  width: var(--chevron-column);
+  margin-left: var(--chevron-clearance);
+  color: var(--secondary);
+  text-align: center;
+}
+
+/* A merged row has no chevron and nothing to unfold, but still occupies the same columns so
+   that the board does not jump when a group gains a second session. */
+.row.merged .chevron {
+  visibility: hidden;
+}

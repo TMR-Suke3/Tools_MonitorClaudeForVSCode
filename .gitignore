@@ -1,12 +1,6 @@
-# ============================================================
-#  .gitignore ベース（公開リポジトリ用）
-#  新規リポジトリの .gitignore にこの内容を貼ってから、
-#  言語固有の分を https://gitignore.io で足す
-# ============================================================
-
-# --- 秘密情報（最優先。絶対にコミットしない） -----------------
-# ※ ネガーション(!)は、除外行より後ろに書かないと効かない。
-#    また親ディレクトリごと除外していると ! は無効になる。
+# --- Secrets (top priority: never commit these) ------------
+# A negation (!) does nothing unless it comes after the line that excluded the
+# file, and nothing at all if a parent directory is excluded.
 .env
 .env.*
 !.env.example
@@ -22,7 +16,7 @@ token*.json
 secrets/
 *.secret
 
-# SSH / パッケージレジストリ / クラウド CLI の認証情報
+# SSH keys, package-registry and cloud-CLI credentials.
 id_rsa*
 id_ed25519*
 id_ecdsa*
@@ -43,14 +37,11 @@ gha-creds-*.json
 .claude/transcripts/
 CLAUDE.local.md
 
-# --- ローカル専用のルール文書（自分用。公開しない） -----------
-# 「公開リポジトリ_ルールブック.md」などの個人運用ルールを
-# .notes/rules/ に置いて持ち歩く。日本語・社内固有ワードを含むので
-# 絶対に公開しないこと（.notes/ でも拾えるが、事故防止に明示しておく）
+# --- Local-only rules and notes ----------------------------
 .notes/rules/
 _rules/
 
-# --- 作業メモ・バイブコーディングの生ログ ---------------------
+# --- Working notes and raw agent logs ----------------------
 .notes/
 scratch/
 _scratch/
@@ -62,16 +53,16 @@ private/
 TODO.local.md
 plan.local.md
 
-# --- 依存・ビルド成果物 --------------------------------------
-# ※ dist/ build/ out/ は、npm publish・GitHub Pages・バイナリ配布などで
-#    「成果物を意図的にコミットする」運用なら、この3行を削除すること。
+# --- Dependencies and build output -------------------------
+# Delete the dist/ build/ out/ lines if a repository deliberately commits its
+# build output -- for npm publish, GitHub Pages, or a binary release.
 node_modules/
 .pnp.*
 dist/
 build/
 out/
 
-# Yarn Berry を使う場合は .yarn/ を丸ごと除外しない（releases/plugins はコミットする）
+# Yarn Berry: do not exclude .yarn/ wholesale -- releases and plugins are committed.
 .yarn/*
 !.yarn/releases/
 !.yarn/plugins/
@@ -89,7 +80,7 @@ venv/
 .ruff_cache/
 *.egg-info/
 
-# --- ログ・キャッシュ ---------------------------------------
+# --- Logs and caches ---------------------------------------
 *.log
 npm-debug.log*
 yarn-error.log*
@@ -98,7 +89,7 @@ pnpm-debug.log*
 coverage/
 .nyc_output/
 
-# --- エディタ・OS -------------------------------------------
+# --- Editors and OS ----------------------------------------
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
@@ -109,7 +100,7 @@ coverage/
 Thumbs.db
 desktop.ini
 
-# --- 大きいファイル（Git LFS を使うなら除外を解除） -----------
+# --- Large files (drop these if the repository uses Git LFS) ---
 *.mp4
 *.mov
 *.zip
@@ -118,9 +109,10 @@ desktop.ini
 *.blend
 *.fbx
 
-# --- Tauri の生成物 -----------------------------------------
-# crates/board/gen/ は tauri-build がビルドのたびに書き出す。中身は設定から
-# 決まるので、コミットしても情報は増えず、行末の差だけが毎回差分に出る。
+# --- Tauri generated files ---------------------------------
+# tauri-build rewrites crates/board/gen/ on every build. Its contents follow from
+# the configuration, so committing it adds no information -- only a line-ending
+# difference in every diff.
 crates/board/gen/
 
 # The hook helper, staged for the bundler as a sidecar. A build artefact copied out of

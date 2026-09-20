@@ -1,0 +1,23 @@
+# What gets watched for updates, and how often.
+#
+# Two ecosystems, because the project has two: the crates the board is built from, and the
+# actions CI runs it with. An action pinned to a major tag still moves under you — Dependabot
+# is what turns that into a pull request you can read rather than a change you inherit.
+version: 2
+
+updates:
+  - package-ecosystem: cargo
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      # Conventional Commits, as CONTRIBUTING.md requires of everything else here.
+      prefix: chore
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci

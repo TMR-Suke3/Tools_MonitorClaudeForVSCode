@@ -5,7 +5,10 @@ members = ["crates/core", "crates/board", "crates/hook"]
 [workspace.package]
 version = "0.1.4"
 edition = "2024"
-rust-version = "1.85"
+# 1.88, not the 1.85 that edition 2024 needs: the fixed releases of `time` (RUSTSEC stack
+# exhaustion) and `serde_with` that Tauri pulls in declare 1.88, and the resolver will not
+# pick a release newer than this floor allows.
+rust-version = "1.88"
 license = "MIT"
 repository = "https://github.com/TMR-Suke3/Tools_MonitorClaudeForVSCode"
 authors = ["TMR-Suke3"]

@@ -52,7 +52,7 @@ directory — the *code* that reads it.
 
 ## Commands
 
-Rust **1.85 or newer**, edition 2024 (`rust-version` in the root `Cargo.toml`; CI runs
+Rust **1.88 or newer**, edition 2024 (`rust-version` in the root `Cargo.toml`; CI runs
 current stable). Every command below runs from the repository root, and every one of them is
 what CI runs (`.github/workflows/ci.yml`).
 

@@ -924,7 +924,7 @@ fn start_watching(app: tauri::AppHandle) {
             // round trip through the event loop — four a second, forever, to answer a question
             // whose answer almost never changes is the cost NFR-03 is about.
             tick = tick.wrapping_add(1);
-            if tick % 8 == 0 {
+            if tick.is_multiple_of(8) {
                 rescue_if_lost(&app);
             }
 

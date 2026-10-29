@@ -22,7 +22,13 @@ jobs:
     # add a cache step when it acquires one.
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v7
+      # Pinned to a commit, not a tag: a tag can be moved to point at anything, a commit
+      # cannot. Dependabot still proposes updates for it, comment and all.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing here pushes, so the token has no reason to stay on disk for the
+          # steps (and build scripts) that follow.
+          persist-credentials: false
 
       - name: Show the toolchain
         run: |
@@ -34,10 +40,13 @@ jobs:
       - name: Format
         run: cargo fmt --all --check
 
+      # `--locked`: build exactly what Cargo.lock names. Without it, a stale lock is quietly
+      # re-resolved to whatever crates.io serves today, which is how an unreviewed release
+      # gets into a build.
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
       # TC-48 … TC-54 live here: the palette of docs/ui-overlay.md §3.2, checked against
       # the thresholds of §3.3 (docs/test-plan.md §7.1).
       - name: Test
-        run: cargo test --workspace
+        run: cargo test --workspace --locked

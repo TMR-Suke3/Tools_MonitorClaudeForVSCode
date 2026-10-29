@@ -51,33 +51,33 @@ fn status_of(name: &str, until: Option<Status>) -> Status {
 
     for line in text.split_inclusive('\n') {
         let trimmed = line.trim_end_matches(['\n', '\r']);
-        if !trimmed.is_empty() {
-            if let Ok(entry) = parse_line(trimmed, offset) {
-                if let Some(stamp) = entry.meta.at {
-                    at = stamp;
-                }
-                machine.observe(&Observation::new(
-                    at,
-                    Event::Record {
-                        offset,
-                        entry: Box::new(entry),
-                    },
-                ));
-                // A tick five seconds after each record, so that the debounces the board is
-                // about actually elapse. Ticking at the record's own instant advances no
-                // time at all, and a replay that never lets time pass never reaches
-                // `awaiting_user` — the status this board exists for.
-                //
-                // Five seconds clears T_pending_interactive (1.5 s) without reaching
-                // T_pending_probe (10 s) or the outlier threshold (45 s), so the statuses
-                // here are the ones the rules give, not ones the replay manufactured.
-                machine.observe(&Observation::new(
-                    Timestamp::from_millis(at.as_millis() + 5_000),
-                    Event::Tick,
-                ));
-                if until.is_some_and(|target| machine.status() == target) {
-                    return machine.status();
-                }
+        if !trimmed.is_empty()
+            && let Ok(entry) = parse_line(trimmed, offset)
+        {
+            if let Some(stamp) = entry.meta.at {
+                at = stamp;
+            }
+            machine.observe(&Observation::new(
+                at,
+                Event::Record {
+                    offset,
+                    entry: Box::new(entry),
+                },
+            ));
+            // A tick five seconds after each record, so that the debounces the board is
+            // about actually elapse. Ticking at the record's own instant advances no
+            // time at all, and a replay that never lets time pass never reaches
+            // `awaiting_user` — the status this board exists for.
+            //
+            // Five seconds clears T_pending_interactive (1.5 s) without reaching
+            // T_pending_probe (10 s) or the outlier threshold (45 s), so the statuses
+            // here are the ones the rules give, not ones the replay manufactured.
+            machine.observe(&Observation::new(
+                Timestamp::from_millis(at.as_millis() + 5_000),
+                Event::Tick,
+            ));
+            if until.is_some_and(|target| machine.status() == target) {
+                return machine.status();
             }
         }
         offset += line.len() as u64;

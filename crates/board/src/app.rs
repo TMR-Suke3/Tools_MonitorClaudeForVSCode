@@ -186,19 +186,19 @@ pub fn run(theme: Theme, inspect: Inspect, live: bool, open_setup: Option<crate:
             // user finds out, and a key that silently does nothing is the one outcome this
             // must not have.
             let registered = crate::hotkeys::register(app.handle());
-            if let Some(state) = app.try_state::<App>() {
-                if let Ok(mut held) = state.hotkeys.lock() {
-                    *held = registered;
-                }
+            if let Some(state) = app.try_state::<App>()
+                && let Ok(mut held) = state.hotkeys.lock()
+            {
+                *held = registered;
             }
 
             // After the shortcuts, because the tray carries the same menu and that menu says
             // whether they registered. A tray that could not be created is not a reason to
             // take the board down — it is yesterday's board, which worked.
-            if let Some(state) = app.try_state::<App>() {
-                if let Err(e) = crate::tray::build(app.handle(), &state) {
-                    eprintln!("mcv-board: no tray icon: {e}");
-                }
+            if let Some(state) = app.try_state::<App>()
+                && let Err(e) = crate::tray::build(app.handle(), &state)
+            {
+                eprintln!("mcv-board: no tray icon: {e}");
             }
 
             if let Some(window) = app.get_webview_window("board") {
@@ -234,14 +234,13 @@ pub fn run(theme: Theme, inspect: Inspect, live: bool, open_setup: Option<crate:
                 let app = window.app_handle();
                 if let (Some(state), Some(view)) =
                     (app.try_state::<App>(), app.get_webview_window("board"))
+                    && let Ok(board) = state.board.lock()
                 {
-                    if let Ok(board) = state.board.lock() {
-                        // The event's factor, not the window's. The window is still answering
-                        // with the old one at this point, and a board sized for the display it
-                        // just left is the "it went to pieces when I plugged a monitor in"
-                        // report this came from.
-                        fit_at(&view, board.width(), board.height(), *scale_factor);
-                    }
+                    // The event's factor, not the window's. The window is still answering
+                    // with the old one at this point, and a board sized for the display it
+                    // just left is the "it went to pieces when I plugged a monitor in"
+                    // report this came from.
+                    fit_at(&view, board.width(), board.height(), *scale_factor);
                 }
             }
             // Remembering where the board is means noticing when it moves. Written on every
@@ -925,7 +924,7 @@ fn start_watching(app: tauri::AppHandle) {
             // round trip through the event loop — four a second, forever, to answer a question
             // whose answer almost never changes is the cost NFR-03 is about.
             tick = tick.wrapping_add(1);
-            if tick % 8 == 0 {
+            if tick.is_multiple_of(8) {
                 rescue_if_lost(&app);
             }
 

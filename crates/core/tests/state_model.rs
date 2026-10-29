@@ -208,15 +208,15 @@ fn tc_17_idle_asserts_nothing_about_the_work() {
     let mut machine = Machine::new();
     let mut idled = false;
     for observation in fixtures::replay_transcript("turn-normal.jsonl").observations {
-        if let Some(change) = machine.observe(&observation) {
-            if change.to == Status::Idle {
-                idled = true;
-                assert_eq!(
-                    change.detail,
-                    mcv_core::machine::Detail { limit: None },
-                    "`idle` carries no verdict, and there is no field for one to hide in",
-                );
-            }
+        if let Some(change) = machine.observe(&observation)
+            && change.to == Status::Idle
+        {
+            idled = true;
+            assert_eq!(
+                change.detail,
+                mcv_core::machine::Detail { limit: None },
+                "`idle` carries no verdict, and there is no field for one to hide in",
+            );
         }
     }
     assert!(idled, "the recording contains a turn that ends");
@@ -351,10 +351,10 @@ fn tc_25c_and_e_both_ends_of_the_wait_are_emitted() {
     let mut machine = Machine::new();
     let mut limit = None;
     for observation in fixtures::replay_transcript("usage-limit-rejected.jsonl").observations {
-        if let Some(change) = machine.observe(&observation) {
-            if change.to == Status::Limited {
-                limit = change.detail.limit;
-            }
+        if let Some(change) = machine.observe(&observation)
+            && change.to == Status::Limited
+        {
+            limit = change.detail.limit;
         }
     }
 
@@ -576,10 +576,10 @@ fn tc_25e_the_rejection_instant_is_the_records_own() {
             Timestamp::from_millis(observation.at.as_millis() + OBSERVER_LAG_MS),
             observation.what.clone(),
         );
-        if let Some(change) = machine.observe(&lagged) {
-            if change.to == Status::Limited {
-                limit = change.detail.limit;
-            }
+        if let Some(change) = machine.observe(&lagged)
+            && change.to == Status::Limited
+        {
+            limit = change.detail.limit;
         }
     }
 

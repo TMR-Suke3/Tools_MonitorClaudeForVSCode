@@ -263,10 +263,10 @@ impl Watcher {
     fn advance(&mut self, session_id: &str, now: i64, reported: &[HookSignal]) -> Status {
         let at = Timestamp::from_millis(now);
 
-        if !self.tails.contains_key(session_id) {
-            if let Some(path) = self.find_transcript(session_id) {
-                self.tails.insert(session_id.to_owned(), Tail::new(path));
-            }
+        if !self.tails.contains_key(session_id)
+            && let Some(path) = self.find_transcript(session_id)
+        {
+            self.tails.insert(session_id.to_owned(), Tail::new(path));
         }
 
         let mut observations: Vec<Observation> = Vec::new();

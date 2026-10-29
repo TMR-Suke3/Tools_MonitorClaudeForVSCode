@@ -79,7 +79,7 @@ Every download has a `.sha256` beside it, which tells a good one from a damaged 
 
 ### From source
 
-Rust 1.85 or newer is the only build dependency; the workspace pulls in nothing else you
+Rust 1.88 or newer is the only build dependency; the workspace pulls in nothing else you
 have to install first.
 
 ```bash
@@ -176,8 +176,8 @@ What this is, so you know before you install it:
 
 ## Development
 
-Requires **Rust 1.85 or newer** — the floor for edition 2024, declared as `rust-version` in
-the root `Cargo.toml`, so Cargo says so plainly if your toolchain is older. There are no
+Requires **Rust 1.88 or newer** — the floor the patched releases of two dependencies set
+(edition 2024 alone needs 1.85), declared as `rust-version` in the root `Cargo.toml`, so Cargo says so plainly if your toolchain is older. There are no
 other build dependencies: the core crate has none at all. CI builds on current stable only,
 so older-but-supported toolchains are not exercised.
 

@@ -235,10 +235,10 @@ fn tc_28_a_subagent_is_never_a_session() {
                 entry.meta.is_sidechain,
                 "every record in a subagent's own file is a side chain",
             );
-            if let Some(id) = &entry.meta.session_id {
-                if !child_ids.contains(id) {
-                    child_ids.push(id.clone());
-                }
+            if let Some(id) = &entry.meta.session_id
+                && !child_ids.contains(id)
+            {
+                child_ids.push(id.clone());
             }
         }
     }

@@ -343,30 +343,29 @@ impl Machine {
             (Some(record_at), Some(newest)) => record_at < newest,
             _ => false,
         };
-        if let Some(record_at) = entry.meta.at {
-            if self
+        if let Some(record_at) = entry.meta.at
+            && self
                 .newest_record_at
                 .is_none_or(|newest| record_at > newest)
-            {
-                self.newest_record_at = Some(record_at);
-            }
+        {
+            self.newest_record_at = Some(record_at);
         }
 
         // The usage limit rides on an ordinary record and outranks the rest of it (§6).
-        if let Some(quota) = &entry.quota {
-            if quota.is_rejected() {
-                let limit = Limit {
-                    rejected_at: entry.meta.at.unwrap_or(at),
-                    resets_at: quota.resets_at,
-                };
-                // A repeated rejection while still limited keeps the original start, so the
-                // pair stays stable for the whole wait.
-                if self.status != Status::Limited {
-                    self.detail.limit = Some(limit);
-                }
-                self.enter(Status::Limited, Confidence::High);
-                return;
+        if let Some(quota) = &entry.quota
+            && quota.is_rejected()
+        {
+            let limit = Limit {
+                rejected_at: entry.meta.at.unwrap_or(at),
+                resets_at: quota.resets_at,
+            };
+            // A repeated rejection while still limited keeps the original start, so the
+            // pair stays stable for the whole wait.
+            if self.status != Status::Limited {
+                self.detail.limit = Some(limit);
             }
+            self.enter(Status::Limited, Confidence::High);
+            return;
         }
 
         match &entry.record {
@@ -690,10 +689,10 @@ impl Machine {
         // Only a vanished session has a timer, and the instant it vanished is recorded where
         // the vanishing was observed. Starting one here would give the same timer to §7.1's
         // still-running session.
-        if let Some(since) = self.vanished_since {
-            if at.millis_since(since) >= self.thresholds.terminated_visible_ms {
-                self.ended = true;
-            }
+        if let Some(since) = self.vanished_since
+            && at.millis_since(since) >= self.thresholds.terminated_visible_ms
+        {
+            self.ended = true;
         }
     }
 

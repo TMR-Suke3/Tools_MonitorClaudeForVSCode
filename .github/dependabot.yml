@@ -11,6 +11,10 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # A release younger than a week is where a hijacked publish lives; let it age before it reaches a PR.
+    # Security updates are not delayed by this.
+    cooldown:
+      default-days: 7
     commit-message:
       # Conventional Commits, as CONTRIBUTING.md requires of everything else here.
       prefix: chore
@@ -19,5 +23,7 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: ci

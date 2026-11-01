@@ -20,7 +20,7 @@ serde_json = { version = "1.0.151", features = ["preserve_order"] }
 # The process table, for the PID-reuse guard: a PID alone is not an identity, so the board
 # has to know when a process started. Cross-platform rather than raw Win32 so the probe can
 # be built and tested wherever CI runs, and cut down to the one feature that is used.
-sysinfo = { version = "0.36.1", default-features = false, features = ["system"] }
+sysinfo = { version = "0.38.4", default-features = false, features = ["system"] }
 # The window and the WebView. The board ships its own front end, so no asset
 # protocol and no extra permissions are enabled. `tray-icon` is not on by default and is
 # what FR-32 needs: the board can be hidden with a key, so it has to live somewhere that

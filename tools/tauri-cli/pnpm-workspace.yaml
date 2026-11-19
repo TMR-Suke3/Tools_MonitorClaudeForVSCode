@@ -2,6 +2,8 @@
 # The same rules as on the development machine, so CI cannot resolve what a laptop would refuse.
 
 # A release younger than a week is where a hijacked publish lives (7 days, in minutes).
+# Applies when the lock is resolved (`pnpm install` / `pnpm update` here). A frozen install in CI
+# does not resolve, so CI checks the lock itself with tools/check_release_age.py.
 minimumReleaseAge: 10080
 # Refuse a version whose publisher is less trusted than an earlier one (e.g. lost provenance).
 trustPolicy: no-downgrade

@@ -62,8 +62,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "$env:GITHUB_SHA (tag $env:TAG) is not on main" }
           "on main: $env:GITHUB_SHA"
 
-      # The tests below rerun here, but the supply-chain audit does not: it is CI's job.
-      # Shipping waits for CI to have passed on this exact commit.
+      # fmt and clippy do not rerun here; the tests do (below), and so does the audit, since
+      # an advisory can appear after CI last ran. For each CI job, the *latest* run on this
+      # commit must have passed -- an old success does not cover a newer failure.
       - name: CI must have passed on the tagged commit
         if: github.event_name == 'push'
         shell: pwsh
@@ -71,10 +72,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           foreach ($name in @('check', 'supply-chain')) {
-            $runs = gh api "repos/$env:GITHUB_REPOSITORY/commits/$env:GITHUB_SHA/check-runs?check_name=$name" | ConvertFrom-Json
-            $ok = @($runs.check_runs | Where-Object { $_.status -eq 'completed' -and $_.conclusion -eq 'success' })
-            if ($ok.Count -eq 0) { throw "CI '$name' has not passed on $env:GITHUB_SHA -- wait for it, or fix it" }
-            "CI '$name': success"
+            $runs = gh api "repos/$env:GITHUB_REPOSITORY/commits/$env:GITHUB_SHA/check-runs?check_name=$name&filter=latest&per_page=100" | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0) { throw "could not read the check runs" }
+            $latest = $runs.check_runs |
+              Where-Object { $_.app.slug -eq 'github-actions' } |
+              Sort-Object { [datetime]$_.started_at } -Descending |
+              Select-Object -First 1
+            if (-not $latest) { throw "CI '$name' never ran on $env:GITHUB_SHA" }
+            if ($latest.status -ne 'completed' -or $latest.conclusion -ne 'success') {
+              throw "CI '$name' on $env:GITHUB_SHA is $($latest.status)/$($latest.conclusion) -- wait for it, or fix it"
+            }
+            "CI '$name': success ($($latest.html_url))"
           }
 
       # Three places say the version, and a download whose name and whose `--version`
@@ -108,6 +116,24 @@ jobs:
       - name: Build
         run: cargo build --release -p mcv-board -p mcv-hook --locked
 
+      # The same audit as CI's supply-chain job, run again now: what ships is judged against
+      # the advisories of today, not of the day CI last ran.
+      - name: Audit the dependencies (cargo-deny)
+        shell: pwsh
+        env:
+          CARGO_DENY_VERSION: "0.20.2"
+          CARGO_DENY_SHA256: "975a22143262fd27476d19ee00c7af67978426e40e1dee94eed6bbade1cf87dc"
+        run: |
+          $name = "cargo-deny-$env:CARGO_DENY_VERSION-x86_64-pc-windows-msvc"
+          $tgz = Join-Path $env:RUNNER_TEMP "$name.tar.gz"
+          Invoke-WebRequest -Uri "https://github.com/EmbarkStudios/cargo-deny/releases/download/$env:CARGO_DENY_VERSION/$name.tar.gz" -OutFile $tgz
+          $hash = (Get-FileHash $tgz -Algorithm SHA256).Hash.ToLower()
+          if ($hash -ne $env:CARGO_DENY_SHA256) { throw "$name.tar.gz: SHA-256 $hash, expected $env:CARGO_DENY_SHA256" }
+          & "$env:SystemRoot\System32\tar.exe" -xzf $tgz -C $env:RUNNER_TEMP
+          if ($LASTEXITCODE -ne 0) { throw "could not unpack $name.tar.gz" }
+          & (Join-Path $env:RUNNER_TEMP "$name/cargo-deny.exe") --locked check advisories bans sources
+          if ($LASTEXITCODE -ne 0) { throw "cargo-deny found a problem" }
+
       # pnpm, not npm, and not a third-party action: this repository allows GitHub's own
       # actions only. The standalone build carries its own Node, needs no installer, and is
       # checked against the pinned hash before anything in it runs.
@@ -127,13 +153,18 @@ jobs:
 
       # The Tauri CLI is pinned in tools/tauri-cli together with every package under it, by
       # version and integrity hash (pnpm-lock.yaml). `--frozen-lockfile` installs exactly
-      # that or fails. tools/tauri-cli/pnpm-workspace.yaml repeats the machine's rules:
-      # nothing younger than seven days, no install scripts unless listed (none are).
+      # that or fails. tools/tauri-cli/pnpm-workspace.yaml repeats the machine's rules for
+      # when the lock is regenerated; that the versions in it are 7+ days old is checked by
+      # CI's supply-chain job (tools/check_release_age.py), since a frozen install never
+      # resolves. Install scripts do not run unless listed (none are).
       - name: Install the Tauri CLI
         working-directory: tools/tauri-cli
+        shell: pwsh
         run: |
           pnpm install --frozen-lockfile
+          if ($LASTEXITCODE -ne 0) { throw "pnpm install failed ($LASTEXITCODE)" }
           pnpm exec tauri --version
+          if ($LASTEXITCODE -ne 0) { throw "the Tauri CLI does not run" }
 
       # The bundler picks the helper up from here, named for the target it was built for.
       # Staged from the build above rather than committed, so what ships is what was tested.

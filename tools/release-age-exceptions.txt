@@ -1,0 +1,5 @@
+# Package versions allowed in a lock file although they are younger than 7 days.
+# Only for a critical security fix whose exact version the owner approved. Remove the line
+# once the version is 7 days old.
+#
+# <ecosystem: crates|npm|pypi> <name> <version>  # reason, who approved, date

@@ -70,6 +70,28 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # The base revision has to be here to diff the lock files against it.
+          fetch-depth: 0
+
+      # The package managers refuse young releases only when they resolve. A lock file
+      # installed as-is (`--locked`, `--frozen-lockfile`) is never resolved, so the rule is
+      # checked on the lock files: every version this change adds must be 7+ days old.
+      # Nothing to compare on the weekly run, which changes no lock file.
+      - name: New package versions must be at least 7 days old
+        if: github.event_name != 'schedule'
+        shell: pwsh
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          $base = if ($env:GITHUB_EVENT_NAME -eq 'pull_request') {
+            git merge-base HEAD "origin/$env:BASE_REF"
+          } elseif ($env:BEFORE -and $env:BEFORE -notmatch '^0+$') { $env:BEFORE } else { 'HEAD^' }
+          "base: $base"
+          python -I tools/check_release_age.py --base $base --days 7 `
+            --exceptions tools/release-age-exceptions.txt `
+            Cargo.lock tools/tauri-cli/pnpm-lock.yaml
+          if ($LASTEXITCODE -ne 0) { throw "a lock file adds a release younger than 7 days" }
 
       - name: Install cargo-deny
         shell: pwsh

@@ -12,7 +12,11 @@ there each hash in the lock is dated by the upload time of the file with that ha
 added to a version that was already locked is checked too.
 
 Usage:
-    python tools/check_release_age.py --base <git-rev> [--days 7] [--exceptions FILE] LOCKFILE...
+    python tools/check_release_age.py (--base <git-rev> | --all) [--days 7] [--exceptions FILE] LOCKFILE...
+
+--base checks what was added since that revision. Pick a base that cannot move past a failure:
+a later commit that leaves the lock alone must not turn a failed check green (e.g. the last
+release tag, not the previous commit). --all checks every entry, for lock files small enough.
 
 Supported lock files, by name: Cargo.lock, pnpm-lock.yaml, and anything else is read as a pip
 `requirements` file with hashes (name==version lines and --hash=sha256: lines, as written by
@@ -88,9 +92,10 @@ def parse(path: str, text: str) -> set[Entry]:
                 current = (_norm_pypi(m.group(1)), m.group(2))
             elif not line.startswith((" ", "\t")):
                 current = None
-            h = PIP_HASH.search(line)
-            if h and current:
-                out.add(("pypi", current[0], current[1], h.group(1)))
+            if current:
+                # every hash on the line: pip accepts several after one requirement
+                for h in PIP_HASH.finditer(line):
+                    out.add(("pypi", current[0], current[1], h.group(1)))
     return out
 
 
@@ -131,7 +136,9 @@ def load_exceptions(path: str | None) -> set[tuple[str, str, str]]:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--base", required=True, help="git revision to compare against")
+    g = ap.add_mutually_exclusive_group(required=True)
+    g.add_argument("--base", help="git revision to compare against")
+    g.add_argument("--all", action="store_true", help="check every entry, not only the new ones")
     ap.add_argument("--days", type=int, default=7)
     ap.add_argument("--exceptions")
     ap.add_argument("lockfiles", nargs="+")
@@ -143,7 +150,9 @@ def main() -> int:
     failed = False
     checked = 0
     for lf in a.lockfiles:
-        new = parse(lf, Path(lf).read_text(encoding="utf-8")) - parse(lf, at_base(a.base, lf))
+        new = parse(lf, Path(lf).read_text(encoding="utf-8"))
+        if not a.all:
+            new -= parse(lf, at_base(a.base, lf))
         for eco, name, version, sha in sorted(new):
             checked += 1
             label = f"{eco} {name} {version}" + (f" [{sha[:12]}]" if sha else "")
@@ -162,7 +171,8 @@ def main() -> int:
             else:
                 print(f"::error file={lf}::{tag}: younger than {a.days} days")
                 failed = True
-    print(f"{checked} new package version(s) / file(s) checked against {a.base}")
+    against = "(all entries)" if a.all else f"against {a.base}"
+    print(f"{checked} package version(s) / file(s) checked {against}")
     return 1 if failed else 0
 
 

@@ -15,8 +15,8 @@ Usage:
     python tools/check_release_age.py (--base <git-rev> | --all) [--days 7] [--exceptions FILE] LOCKFILE...
 
 --base checks what was added since that revision. Pick a base that cannot move past a failure:
-a later commit that leaves the lock alone must not turn a failed check green (e.g. the last
-release tag, not the previous commit). --all checks every entry, for lock files small enough.
+a later commit that leaves the lock alone, or a tag put on the failing commit, must not turn a
+failed check green (e.g. the latest published release, not the previous commit or any tag). --all checks every entry, for lock files small enough.
 
 Supported lock files, by name: Cargo.lock, pnpm-lock.yaml, and anything else is read as a pip
 `requirements` file with hashes (name==version lines and --hash=sha256: lines, as written by
@@ -38,6 +38,7 @@ import json
 import re
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -54,7 +55,17 @@ PIP_HASH = re.compile(r"--hash=sha256:([0-9a-f]{64})")
 PNPM_KEY = re.compile(r"^  '?((?:@[^/@\s']+/)?[^@\s':]+)@([^':(\s]+)'?:\s*$")
 
 
+_last_crates = 0.0
+
+
 def _get(url: str) -> dict:
+    # crates.io asks automated clients for at most one request per second
+    global _last_crates
+    if url.startswith("https://crates.io/"):
+        wait = 1.0 - (time.monotonic() - _last_crates)
+        if wait > 0:
+            time.sleep(wait)
+        _last_crates = time.monotonic()
     req = urllib.request.Request(url, headers=UA)
     with urllib.request.urlopen(req, timeout=60) as r:
         return json.load(r)

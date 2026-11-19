@@ -2,48 +2,93 @@ name: Release
 
 # Cutting a release is pushing a tag. Nothing else publishes, so `main` staying green
 # never produces a download by accident.
+#
+# `workflow_dispatch` is the dry run: the same build and packaging, uploaded as a workflow
+# artifact so it can be inspected, and no release. It is how a change to this file, to the
+# Tauri CLI or to the bundling is tried before a tag depends on it.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
-# The default token is read-only (see ci.yml); creating a release needs to write.
-permissions:
-  contents: write
+# Nothing by default; each job asks for exactly what it needs.
+permissions: {}
 
 env:
   CARGO_TERM_COLOR: always
   # The tag reaches the scripts below as an environment variable, never pasted into them
   # with `${{ }}`: a tag name may hold `$(...)`, and pasted into a pwsh string that runs.
   TAG: ${{ github.ref_name }}
+  # The pnpm that installs the Tauri CLI. Pinned by version and by the SHA-256 GitHub records
+  # for the release asset (the same value as a local download of it), so a replaced asset
+  # fails the step instead of running. Keep it the version that wrote tools/tauri-cli's lock.
+  PNPM_VERSION: "12.15.0"
+  PNPM_SHA256: "84cf69db1be19e95bb4e5bef329291a046f2821b390d87e00f5690809d8a2ed7"
 
 jobs:
-  release:
+  build:
     # The product targets Windows 11 (ADR-0002), so this is both the only platform worth
     # shipping and the only one the checks mean anything on.
+    #
+    # Everything that runs code from a dependency -- cargo's build scripts, the Tauri CLI
+    # from npm -- runs here, with a token that can only read. The token that can write a
+    # release lives in `publish`, which runs nothing but `gh`.
     runs-on: windows-latest
+    permissions:
+      contents: read
+      # To ask whether CI passed on the tagged commit.
+      checks: read
     steps:
       # Pinned to a commit for the same reason as in ci.yml.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # Publishing goes through `gh` with GH_TOKEN; git itself never pushes, so the
-          # write token is not left in .git/config for the build to find.
           persist-credentials: false
+          # Whole history, so the tagged commit can be checked against main.
+          fetch-depth: 0
 
       - name: Show the toolchain
         run: |
           rustup show
           cargo --version
 
+      # A tag can point at any commit, including one that never went through a pull request.
+      # Only what is on main -- protected, reviewed, CI-checked -- may ship.
+      - name: The tagged commit must be on main
+        if: github.event_name == 'push'
+        shell: pwsh
+        run: |
+          git fetch --no-tags origin main
+          git merge-base --is-ancestor $env:GITHUB_SHA origin/main
+          if ($LASTEXITCODE -ne 0) { throw "$env:GITHUB_SHA (tag $env:TAG) is not on main" }
+          "on main: $env:GITHUB_SHA"
+
+      # The tests below rerun here, but the supply-chain audit does not: it is CI's job.
+      # Shipping waits for CI to have passed on this exact commit.
+      - name: CI must have passed on the tagged commit
+        if: github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          foreach ($name in @('check', 'supply-chain')) {
+            $runs = gh api "repos/$env:GITHUB_REPOSITORY/commits/$env:GITHUB_SHA/check-runs?check_name=$name" | ConvertFrom-Json
+            $ok = @($runs.check_runs | Where-Object { $_.status -eq 'completed' -and $_.conclusion -eq 'success' })
+            if ($ok.Count -eq 0) { throw "CI '$name' has not passed on $env:GITHUB_SHA -- wait for it, or fix it" }
+            "CI '$name': success"
+          }
+
       # Three places say the version, and a download whose name and whose `--version`
       # disagree is worse than a release that did not happen. `tauri.conf.json` matters as
       # much as the manifest: the bundler takes the installers' file names from it, so a
       # stale value there ships `mcv-board_0.1.0_x64-setup.exe` from tag v0.1.1.
+      #
+      # A dry run has no tag; it takes the manifest's version and still checks the other two.
       - name: The tag must match every version in the tree
         shell: pwsh
         run: |
-          $tag = $env:TAG -replace '^v', ''
           $manifest = (Select-String -Path Cargo.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
           $conf = (Get-Content crates/board/tauri.conf.json -Raw | ConvertFrom-Json).version
+          $tag = if ($env:GITHUB_EVENT_NAME -eq 'push') { $env:TAG -replace '^v', '' } else { $manifest }
           "tag              : $tag"
           "Cargo.toml       : $manifest"
           "tauri.conf.json  : $conf"
@@ -53,22 +98,42 @@ jobs:
           if ($conf -ne $tag) {
             throw "tag v$tag does not match tauri.conf.json ($conf), which names the installers"
           }
+          "VERSION=$tag" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
 
-      # Nothing ships untested. CI runs this on every push, but a tag can point at any
-      # commit, so the artifact is built from a tree that was checked here and now.
+      # Nothing ships untested. CI runs this on every push, but the artifact is built from a
+      # tree that was checked here and now.
       - name: Test
         run: cargo test --workspace --locked
 
       - name: Build
         run: cargo build --release -p mcv-board -p mcv-hook --locked
 
-      # The npm build of the CLI is a prebuilt binary; `cargo install tauri-cli` compiles it
-      # from source and costs minutes for the same tool. Pinned, so a release is not at the
-      # mercy of whatever the CLI does next. `--ignore-scripts` because the prebuilt binary
-      # arrives as an optional dependency and needs no install script, and an install script
-      # is where a compromised package does its work -- in a job that holds a write token.
+      # pnpm, not npm, and not a third-party action: this repository allows GitHub's own
+      # actions only. The standalone build carries its own Node, needs no installer, and is
+      # checked against the pinned hash before anything in it runs.
+      - name: Install pnpm
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP 'pnpm.zip'
+          $dir = Join-Path $env:RUNNER_TEMP 'pnpm'
+          Invoke-WebRequest -Uri "https://github.com/pnpm/pnpm/releases/download/v$env:PNPM_VERSION/pnpm-win32-x64.zip" -OutFile $zip
+          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          if ($hash -ne $env:PNPM_SHA256) { throw "pnpm-win32-x64.zip: SHA-256 $hash, expected $env:PNPM_SHA256" }
+          Expand-Archive $zip -DestinationPath $dir
+          $exe = Get-ChildItem $dir -Recurse -Filter pnpm.exe | Select-Object -First 1
+          if (-not $exe) { throw "pnpm.exe not found in the archive" }
+          $exe.DirectoryName | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          & $exe.FullName --version
+
+      # The Tauri CLI is pinned in tools/tauri-cli together with every package under it, by
+      # version and integrity hash (pnpm-lock.yaml). `--frozen-lockfile` installs exactly
+      # that or fails. tools/tauri-cli/pnpm-workspace.yaml repeats the machine's rules:
+      # nothing younger than seven days, no install scripts unless listed (none are).
       - name: Install the Tauri CLI
-        run: npm install -g --ignore-scripts @tauri-apps/cli@2.5.0
+        working-directory: tools/tauri-cli
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec tauri --version
 
       # The bundler picks the helper up from here, named for the target it was built for.
       # Staged from the build above rather than committed, so what ships is what was tested.
@@ -87,7 +152,10 @@ jobs:
       # the helper inside the installers.
       - name: Build the installers
         working-directory: crates/board
-        run: tauri build --config tauri.bundle.json
+        shell: pwsh
+        run: |
+          & "$env:GITHUB_WORKSPACE/tools/tauri-cli/node_modules/.bin/tauri.cmd" build --config tauri.bundle.json
+          if ($LASTEXITCODE -ne 0) { throw "tauri build failed ($LASTEXITCODE)" }
 
       # Three downloads, because they are for three situations: the installer most people
       # want, the MSI for machines that are managed, and the zip for anyone who would rather
@@ -106,7 +174,7 @@ jobs:
       - name: Package
         shell: pwsh
         run: |
-          $version = $env:TAG -replace '^v', ''
+          $version = $env:VERSION
           New-Item -ItemType Directory -Force -Path dist | Out-Null
 
           $zip = "dist/mcv-board-$version-windows-x64.zip"
@@ -135,9 +203,53 @@ jobs:
           }
           Get-ChildItem dist
 
-      # `gh` is preinstalled on the runner, so this needs no third-party action. The notes
-      # are built as an array rather than a here-string: a pwsh here-string has to close at
-      # column 0, which cannot happen inside a YAML block scalar.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    # The only job that can write, and it runs no code from the repository or its
+    # dependencies: no checkout, no build, only the files `build` produced and `gh`, which
+    # is preinstalled on the runner.
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-dist
+          path: dist
+
+      # Exactly the six files `Package` names, and each checksum must still match its file.
+      - name: Check what is about to ship
+        shell: pwsh
+        run: |
+          $version = $env:TAG -replace '^v', ''
+          $expected = @(
+            "mcv-board-$version-windows-x64.zip",
+            "mcv-board_${version}_x64-setup.exe",
+            "mcv-board_${version}_x64_en-US.msi"
+          )
+          $expected = $expected + ($expected | ForEach-Object { "$_.sha256" }) | Sort-Object
+          $actual = Get-ChildItem dist -File | ForEach-Object { $_.Name } | Sort-Object
+          if (Compare-Object $expected $actual) {
+            throw "dist holds [$($actual -join ', ')], expected [$($expected -join ', ')]"
+          }
+          foreach ($f in $expected | Where-Object { $_ -notlike '*.sha256' }) {
+            $want = ((Get-Content "dist/$f.sha256" -Raw).Trim() -split '\s+')[0]
+            $have = (Get-FileHash "dist/$f" -Algorithm SHA256).Hash.ToLower()
+            if ($want -ne $have) { throw "$f does not match its .sha256" }
+            "$f  $have"
+          }
+
+      # The notes are built as an array rather than a here-string: a pwsh here-string has
+      # to close at column 0, which cannot happen inside a YAML block scalar.
+      # `--verify-tag`: never let `gh` create the tag; publish only one that already exists.
       - name: Publish
         shell: pwsh
         env:
@@ -168,5 +280,7 @@ jobs:
           Set-Content -Path release-notes.md -Value $notes -Encoding utf8
           gh release create $env:TAG `
             (Get-ChildItem dist -File | ForEach-Object { $_.FullName }) `
+            --repo $env:GITHUB_REPOSITORY `
+            --verify-tag `
             --title "v$version" `
             --notes-file release-notes.md

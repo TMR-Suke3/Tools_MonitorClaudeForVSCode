@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Weekly, so an advisory published against an unchanged Cargo.lock still fails a run.
+  schedule:
+    - cron: "23 0 * * 1"
 
 permissions:
   contents: read
@@ -50,3 +53,37 @@ jobs:
       # the thresholds of §3.3 (docs/test-plan.md §7.1).
       - name: Test
         run: cargo test --workspace --locked
+
+  supply-chain:
+    # What Dependabot cannot see: advisories that exist only in RustSec (no GHSA number),
+    # unmaintained crates, and a dependency arriving from anywhere but crates.io.
+    # deny.toml says what is checked and lists each exception with its reason.
+    # Also run weekly (schedule below), because a new advisory fails a tree that did not change.
+    runs-on: windows-latest
+    env:
+      # Pinned by version and by the SHA-256 GitHub records for the release asset, which is
+      # also the value in the release's own .sha256 file. 0.20.2 rather than the newest:
+      # a release younger than seven days does not go in.
+      CARGO_DENY_VERSION: "0.20.2"
+      CARGO_DENY_SHA256: "975a22143262fd27476d19ee00c7af67978426e40e1dee94eed6bbade1cf87dc"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install cargo-deny
+        shell: pwsh
+        run: |
+          $name = "cargo-deny-$env:CARGO_DENY_VERSION-x86_64-pc-windows-msvc"
+          $tgz = Join-Path $env:RUNNER_TEMP "$name.tar.gz"
+          Invoke-WebRequest -Uri "https://github.com/EmbarkStudios/cargo-deny/releases/download/$env:CARGO_DENY_VERSION/$name.tar.gz" -OutFile $tgz
+          $hash = (Get-FileHash $tgz -Algorithm SHA256).Hash.ToLower()
+          if ($hash -ne $env:CARGO_DENY_SHA256) { throw "$name.tar.gz: SHA-256 $hash, expected $env:CARGO_DENY_SHA256" }
+          # Windows' own bsdtar: a GNU tar earlier on PATH reads `C:` as a remote host.
+          & "$env:SystemRoot\System32\tar.exe" -xzf $tgz -C $env:RUNNER_TEMP
+          if ($LASTEXITCODE -ne 0) { throw "could not unpack $name.tar.gz" }
+          Join-Path $env:RUNNER_TEMP $name | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+
+      # `--locked`: judge the tree Cargo.lock names, not one re-resolved today.
+      - name: Advisories, bans and sources
+        run: cargo-deny --locked check advisories bans sources

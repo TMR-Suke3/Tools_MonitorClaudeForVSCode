@@ -7,6 +7,8 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
+# crates.io には出さない。cargo-deny が path 依存の版指定なしを許すのもこの印による
+publish = false
 
 # The payload arrives as JSON on standard input, and the line written out is JSON too. Both
 # are read through an allow-list of named fields, which is what keeps the conversation — the

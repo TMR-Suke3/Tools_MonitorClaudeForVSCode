@@ -1,0 +1,10 @@
+# Settings for the one pnpm project in this repository (the pinned Tauri CLI).
+# The same rules as on the development machine, so CI cannot resolve what a laptop would refuse.
+
+# A release younger than a week is where a hijacked publish lives (7 days, in minutes).
+minimumReleaseAge: 10080
+# Refuse a version whose publisher is less trusted than an earlier one (e.g. lost provenance).
+trustPolicy: no-downgrade
+# Install scripts do not run unless listed; an unlisted one that asks to run fails the install.
+# The CLI's prebuilt binary arrives as an optional dependency and needs none.
+strictDepBuilds: true

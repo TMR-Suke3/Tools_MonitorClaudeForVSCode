@@ -27,7 +27,7 @@ sysinfo = { version = "0.38.4", default-features = false, features = ["system"] 
 # protocol and no extra permissions are enabled. `tray-icon` is not on by default and is
 # what FR-32 needs: the board can be hidden with a key, so it has to live somewhere that
 # does not depend on the user remembering that key.
-tauri = { version = "2.11.5", features = ["tray-icon"] }
+tauri = { version = "2.12.5", features = ["tray-icon"] }
 # Two keys that work while another application has focus: bring the board to the display the
 # mouse is on, and show or hide it. There is no way to listen for a key outside your own
 # window without the OS's own registration, and this is Tauri's binding for it. Used from Rust
@@ -40,7 +40,7 @@ tauri-plugin-global-shortcut = "2.3.1"
 tauri-plugin-single-instance = "2.4.4"
 
 [build-dependencies]
-tauri-build = { version = "2.6.3", features = [] }
+tauri-build = { version = "2.7.4", features = [] }
 
 [dev-dependencies]
 serde_json = "1.0.151"

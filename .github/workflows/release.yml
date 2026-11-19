@@ -37,7 +37,7 @@ jobs:
     permissions:
       contents: read
       # To ask whether CI passed on the tagged commit.
-      checks: read
+      actions: read
     steps:
       # Pinned to a commit for the same reason as in ci.yml.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -63,27 +63,24 @@ jobs:
           "on main: $env:GITHUB_SHA"
 
       # fmt and clippy do not rerun here; the tests do (below), and so does the audit, since
-      # an advisory can appear after CI last ran. For each CI job, the *latest* run on this
-      # commit must have passed -- an old success does not cover a newer failure.
+      # an advisory can appear after CI last ran. What has to have passed is CI's *push* run
+      # on this commit -- the one that compared its lock files with the commit before and
+      # checked their release ages. The latest such run decides: an old success does not
+      # cover a newer failure, and the weekly run (which skips the age check) does not count.
       - name: CI must have passed on the tagged commit
         if: github.event_name == 'push'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          foreach ($name in @('check', 'supply-chain')) {
-            $runs = gh api "repos/$env:GITHUB_REPOSITORY/commits/$env:GITHUB_SHA/check-runs?check_name=$name&filter=latest&per_page=100" | ConvertFrom-Json
-            if ($LASTEXITCODE -ne 0) { throw "could not read the check runs" }
-            $latest = $runs.check_runs |
-              Where-Object { $_.app.slug -eq 'github-actions' } |
-              Sort-Object { [datetime]$_.started_at } -Descending |
-              Select-Object -First 1
-            if (-not $latest) { throw "CI '$name' never ran on $env:GITHUB_SHA" }
-            if ($latest.status -ne 'completed' -or $latest.conclusion -ne 'success') {
-              throw "CI '$name' on $env:GITHUB_SHA is $($latest.status)/$($latest.conclusion) -- wait for it, or fix it"
-            }
-            "CI '$name': success ($($latest.html_url))"
+          $runs = gh api "repos/$env:GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$env:GITHUB_SHA&event=push&per_page=50" | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw "could not read the CI runs" }
+          $latest = $runs.workflow_runs | Sort-Object { [datetime]$_.created_at } -Descending | Select-Object -First 1
+          if (-not $latest) { throw "CI never ran on a push of $env:GITHUB_SHA -- tag a commit that reached main" }
+          if ($latest.status -ne 'completed' -or $latest.conclusion -ne 'success') {
+            throw "CI on $env:GITHUB_SHA is $($latest.status)/$($latest.conclusion) ($($latest.html_url)) -- wait for it, or fix it"
           }
+          "CI: success ($($latest.html_url))"
 
       # Three places say the version, and a download whose name and whose `--version`
       # disagree is worse than a release that did not happen. `tauri.conf.json` matters as

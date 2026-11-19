@@ -23,6 +23,10 @@ jobs:
     # C-1: the product targets Windows 11 (ADR-0002), so this is the platform the checks
     # have to be green on. Nothing is cached yet because the workspace has no dependencies;
     # add a cache step when it acquires one.
+    #
+    # After supply-chain, not beside it: clippy and the tests run every build script and proc
+    # macro in the tree, so a lock file that adds a too-young release has to be stopped first.
+    needs: supply-chain
     runs-on: windows-latest
     steps:
       # Pinned to a commit, not a tag: a tag can be moved to point at anything, a commit

@@ -7,16 +7,23 @@ without the setting, would go straight in. This checks the lock files themselves
 package version that is in the working tree but not in the base revision is looked up in its
 registry, and its publish time must be at least N days old.
 
+On PyPI a version is a set of files, and a file can be uploaded long after the others, so
+there each hash in the lock is dated by the upload time of the file with that hash. A hash
+added to a version that was already locked is checked too.
+
 Usage:
     python tools/check_release_age.py --base <git-rev> [--days 7] [--exceptions FILE] LOCKFILE...
 
-Supported lock files, by name: Cargo.lock, pnpm-lock.yaml, *.lock / *.txt in pip
-`requirements` format (name==version lines, as written by `uv pip compile`).
+Supported lock files, by name: Cargo.lock, pnpm-lock.yaml, and anything else is read as a pip
+`requirements` file with hashes (name==version lines and --hash=sha256: lines, as written by
+`uv pip compile --generate-hashes`).
 
 Exceptions file: one `ecosystem name version  # reason` per line (ecosystem is crates, npm
 or pypi). Only for a critical fix whose exact version the owner approved.
 
-Standard library only. Requests carry a generic User-Agent and nothing about the user.
+Run it before installing anything from the lock: a check after the install comes after the
+code has already run. Standard library only. Requests carry a generic User-Agent and
+nothing about the user.
 """
 
 from __future__ import annotations
@@ -34,6 +41,14 @@ from pathlib import Path
 
 UA = {"User-Agent": "release-age-check/1.0 (CI; no contact)"}
 
+# (ecosystem, name, version, sha256). sha256 is "" for crates and npm, whose published
+# versions are single immutable files.
+Entry = tuple[str, str, str, str]
+
+PIP_REQ = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)==([^\s;\\]+)")
+PIP_HASH = re.compile(r"--hash=sha256:([0-9a-f]{64})")
+PNPM_KEY = re.compile(r"^  '?((?:@[^/@\s']+/)?[^@\s':]+)@([^':(\s]+)'?:\s*$")
+
 
 def _get(url: str) -> dict:
     req = urllib.request.Request(url, headers=UA)
@@ -45,49 +60,55 @@ def _norm_pypi(name: str) -> str:
     return re.sub(r"[-_.]+", "-", name).lower()
 
 
-def parse(path: str, text: str) -> set[tuple[str, str, str]]:
-    """Return {(ecosystem, name, version)} for registry packages in a lock file."""
+def parse(path: str, text: str) -> set[Entry]:
+    """Return the registry packages a lock file names."""
     name = Path(path).name
-    out: set[tuple[str, str, str]] = set()
+    out: set[Entry] = set()
     if name == "Cargo.lock":
         for block in text.split("[[package]]"):
             n = re.search(r'^name = "([^"]+)"', block, re.M)
             v = re.search(r'^version = "([^"]+)"', block, re.M)
             s = re.search(r'^source = "registry\+', block, re.M)
             if n and v and s:
-                out.add(("crates", n.group(1), v.group(1)))
+                out.add(("crates", n.group(1), v.group(1), ""))
     elif name == "pnpm-lock.yaml":
         in_packages = False
         for line in text.splitlines():
             if re.match(r"^\S", line):
                 in_packages = line.startswith("packages:")
                 continue
-            if not in_packages:
-                continue
-            m = re.match(r"^  '?((?:@[^/@\s']+/)?[^@\s':]+)@([^':(\s]+)'?:\s*$", line)
+            m = PNPM_KEY.match(line) if in_packages else None
             if m:
-                out.add(("npm", m.group(1), m.group(2)))
+                out.add(("npm", m.group(1), m.group(2), ""))
     else:
+        current: tuple[str, str] | None = None
         for line in text.splitlines():
-            m = re.match(r"^([A-Za-z0-9][A-Za-z0-9._-]*)==([^\s;\\]+)", line)
+            m = PIP_REQ.match(line)
             if m:
-                out.add(("pypi", _norm_pypi(m.group(1)), m.group(2)))
+                current = (_norm_pypi(m.group(1)), m.group(2))
+            elif not line.startswith((" ", "\t")):
+                current = None
+            h = PIP_HASH.search(line)
+            if h and current:
+                out.add(("pypi", current[0], current[1], h.group(1)))
     return out
 
 
-def published(eco: str, name: str, version: str) -> dt.datetime:
+_pypi: dict[tuple[str, str], dict] = {}
+
+
+def published(eco: str, name: str, version: str, sha256: str) -> dt.datetime:
     if eco == "crates":
-        d = _get(f"https://crates.io/api/v1/crates/{name}/{version}")
-        stamp = d["version"]["created_at"]
+        stamp = _get(f"https://crates.io/api/v1/crates/{name}/{version}")["version"]["created_at"]
     elif eco == "npm":
-        d = _get("https://registry.npmjs.org/" + urllib.parse.quote(name, safe="@"))
-        stamp = d["time"][version]
+        stamp = _get("https://registry.npmjs.org/" + urllib.parse.quote(name, safe="@"))["time"][version]
     else:
-        d = _get(f"https://pypi.org/pypi/{name}/{version}/json")
-        times = [u["upload_time_iso_8601"] for u in d["urls"]]
-        if not times:
-            raise LookupError("no files")
-        stamp = min(times)
+        if (name, version) not in _pypi:
+            _pypi[(name, version)] = _get(f"https://pypi.org/pypi/{name}/{version}/json")
+        files = [u for u in _pypi[(name, version)]["urls"] if u["digests"]["sha256"] == sha256]
+        if not files:
+            raise LookupError(f"no file on PyPI with sha256 {sha256[:12]}")
+        stamp = files[0]["upload_time_iso_8601"]
     return dt.datetime.fromisoformat(stamp.replace("Z", "+00:00"))
 
 
@@ -123,16 +144,17 @@ def main() -> int:
     checked = 0
     for lf in a.lockfiles:
         new = parse(lf, Path(lf).read_text(encoding="utf-8")) - parse(lf, at_base(a.base, lf))
-        for eco, name, version in sorted(new):
+        for eco, name, version, sha in sorted(new):
             checked += 1
+            label = f"{eco} {name} {version}" + (f" [{sha[:12]}]" if sha else "")
             try:
-                when = published(eco, name, version)
+                when = published(eco, name, version, sha)
             except (urllib.error.URLError, KeyError, LookupError, ValueError) as e:
-                print(f"::error file={lf}::{eco} {name} {version}: publish time unknown ({e})")
+                print(f"::error file={lf}::{label}: publish time unknown ({e})")
                 failed = True
                 continue
             age = now - when
-            tag = f"{eco} {name} {version}  published {when:%Y-%m-%d} ({age.days} days ago)"
+            tag = f"{label}  published {when:%Y-%m-%d} ({age.days} days ago)"
             if age >= limit:
                 print(f"ok    {tag}")
             elif (eco, name, version) in allowed:
@@ -140,7 +162,7 @@ def main() -> int:
             else:
                 print(f"::error file={lf}::{tag}: younger than {a.days} days")
                 failed = True
-    print(f"{checked} new package version(s) checked against {a.base}")
+    print(f"{checked} new package version(s) / file(s) checked against {a.base}")
     return 1 if failed else 0
 
 

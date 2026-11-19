@@ -18,14 +18,6 @@ db-urls = ["https://github.com/rustsec/advisory-db"]
 yanked = "deny"
 unmaintained = "all"
 ignore = [
-  # unic-* は保守終了の通知だけ（脆弱性ではない）。tauri-utils 2.9.3 → urlpattern 0.3 から入る。
-  # tauri-utils 2.10（urlpattern 0.6、unic なし）は tauri 2.12 が要るので、その更新の PR で外す。
-  # 見直し: 2026-12-31 までに tauri 2.12 へ上げ、ここを消す。
-  { id = "RUSTSEC-2025-0075", reason = "unic-char-range: unmaintained, via tauri-utils 2.9 / urlpattern 0.3; goes with tauri 2.12" },
-  { id = "RUSTSEC-2025-0080", reason = "unic-common: unmaintained, via tauri-utils 2.9 / urlpattern 0.3; goes with tauri 2.12" },
-  { id = "RUSTSEC-2025-0081", reason = "unic-char-property: unmaintained, via tauri-utils 2.9 / urlpattern 0.3; goes with tauri 2.12" },
-  { id = "RUSTSEC-2025-0098", reason = "unic-ucd-version: unmaintained, via tauri-utils 2.9 / urlpattern 0.3; goes with tauri 2.12" },
-  { id = "RUSTSEC-2025-0100", reason = "unic-ucd-ident: unmaintained, via tauri-utils 2.9 / urlpattern 0.3; goes with tauri 2.12" },
 ]
 
 [bans]

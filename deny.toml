@@ -1,0 +1,48 @@
+# cargo-deny の設定。CI（ci.yml の Supply chain ジョブ）が `cargo deny --locked check` で読む。
+#
+# Dependabot は GitHub の advisory DB しか見ない。RUSTSEC にだけ載る通知（GHSA 番号のないもの）は
+# 拾えないので、RustSec の DB をここで直接照合する。
+
+[graph]
+# 製品は Windows 11 だけ（ADR-0002）。ビルドも Windows のランナーで行うので、ホスト側で動く
+# build script と proc macro もこのターゲットで解決される。Linux / macOS でしか組み込まれない
+# クレート（zbus、x11rb、plist 経由の quick-xml、gtk 系など）はここで外れ、その通知も出ない。
+targets = ["x86_64-pc-windows-msvc"]
+all-features = false
+
+[advisories]
+# 脆弱性・unsound・yanked は失敗にする。unmaintained は「直接・間接を問わず」失敗にする。
+# 例外は下の ignore に ID・理由・見直し時期を書いて足す。一括では外さない。
+version = 2
+db-urls = ["https://github.com/rustsec/advisory-db"]
+yanked = "deny"
+unmaintained = "all"
+ignore = [
+  # unic-* は保守終了の通知だけ（脆弱性ではない）。tauri-utils 2.9.3 → urlpattern 0.3 から入る。
+  # tauri-utils 2.10（urlpattern 0.6、unic なし）は tauri 2.12 が要るので、その更新の PR で外す。
+  # 見直し: 2026-12-31 までに tauri 2.12 へ上げ、ここを消す。
+  { id = "RUSTSEC-2025-0075", reason = "unic-char-range: unmaintained, via tauri-utils 2.9 / urlpattern 0.3; goes with tauri 2.12" },
+  { id = "RUSTSEC-2025-0080", reason = "unic-common: unmaintained, via tauri-utils 2.9 / urlpattern 0.3; goes with tauri 2.12" },
+  { id = "RUSTSEC-2025-0081", reason = "unic-char-property: unmaintained, via tauri-utils 2.9 / urlpattern 0.3; goes with tauri 2.12" },
+  { id = "RUSTSEC-2025-0098", reason = "unic-ucd-version: unmaintained, via tauri-utils 2.9 / urlpattern 0.3; goes with tauri 2.12" },
+  { id = "RUSTSEC-2025-0100", reason = "unic-ucd-ident: unmaintained, via tauri-utils 2.9 / urlpattern 0.3; goes with tauri 2.12" },
+]
+
+[bans]
+# 同じクレートの複数の版は Tauri の依存ツリーでは避けられない（windows-sys など）。警告に留める。
+multiple-versions = "warn"
+wildcards = "deny"
+# path 依存（ワークスペース内）は版の指定がなくてよい
+allow-wildcard-paths = true
+
+[sources]
+# crates.io 以外（git や別のレジストリ）から依存が入ってきたら失敗にする
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
+
+[licenses]
+# ライセンスの方針はまだ決めていないので、このジョブでは検査しない（check の対象から外す）
+version = 2
+allow = []

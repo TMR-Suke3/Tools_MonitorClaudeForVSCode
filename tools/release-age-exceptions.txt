@@ -3,3 +3,6 @@
 # once the version is 7 days old.
 #
 # <ecosystem: crates|npm|pypi> <name> <version>  # reason, who approved, date
+crates url 2.5.9  # RUSTSEC-2026-0592 (stack overflow in Url::origin on nested blob: URLs); owner approved 2026-11-23; 7 days old on 2026-11-27
+crates form_urlencoded 1.2.3  # required by url 2.5.9 (same release); owner approved 2026-11-23; 7 days old on 2026-11-27
+crates cookie 0.18.3  # RUSTSEC-2026-0594 (private cookie nonces repeat after fork); owner approved 2026-11-23; 7 days old on 2026-11-30

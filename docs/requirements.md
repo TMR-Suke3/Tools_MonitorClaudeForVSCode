@@ -477,6 +477,19 @@ setup, not instructions. Full specification: [hook-setup.md](hook-setup.md).
   **watch for the next event** rather than name a cause, which is the same proof FR-50
   requires of the install.
 
+### Codex in VS Code on Windows
+
+- **FR-62** The board **MUST** show recent Codex IDE turns as session rows in
+  the existing workspace groups. Sessions **MUST** retain independent
+  identities across windows and within one workspace.
+- **FR-63** Clicking a Codex row **MUST** attempt to open its conversation
+  in the matching VS Code or VS Code Insiders window. If the workspace
+  window cannot be selected unambiguously, report that the target was not found.
+- **FR-64** Codex rows **MUST** expire after a bounded time. A row represents
+  observed turn activity and GUI questions. An unanswered GUI question uses
+  the existing awaiting-user state until its matching answer, turn end or timeout.
+  Open tabs and approval prompts require a separate observation source.
+
 ## 7. Non-functional requirements
 
 - **NFR-01 Latency** — A status change **MUST** be visible within **2 s** of the underlying

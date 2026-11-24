@@ -503,3 +503,14 @@ The gap does not mean the requirement is wrong. FR-14's error case is rare rathe
 absent — three and a half months of one developer's transcripts is not evidence that a class
 of failure does not exist, only that it did not happen to occur. The test waits for a
 sample; the requirement stands.
+
+
+## Codex IDE coverage
+
+- FR-62, FR-64 — `crates/board/tests/codex.rs` exercises independent
+  sessions, IDE filtering, titles, split writes and expiration.
+- FR-63 — The same suite checks the local conversation URI and unique
+  workspace-title matching. On Windows, open two VS Code workspace windows,
+  run one Codex turn per window, and click each board row in turn. Confirm the
+  intended window and conversation. Repeat with another tab frontmost and
+  confirm an ambiguous workspace title reports no target.

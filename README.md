@@ -164,6 +164,18 @@ for exact mode: one line per precondition, each with the single action that repa
 
 </details>
 
+### Codex in VS Code on Windows
+
+The same board shows recent turns from the local Codex VS Code extension.
+It displays an observed start as working for up to 30 minutes and an observed
+finish for five minutes. A Codex GUI question uses the existing waiting
+indicator until it is answered, the turn ends, or the 30-minute timeout expires.
+Open tabs and approval prompts require a separate signal.
+
+Clicking a Codex row tries to open the conversation in the uniquely matching
+VS Code or Insiders workspace window. If the target cannot be determined,
+the board reports that it did not find it.
+
 ## Limits
 
 What this is, so you know before you install it:

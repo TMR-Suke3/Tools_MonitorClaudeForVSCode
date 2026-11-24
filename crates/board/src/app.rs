@@ -644,6 +644,9 @@ struct RaiseResult {
 
 #[cfg(windows)]
 fn raise_for(id: &str, state: &tauri::State<'_, App>) -> crate::raise::Raise {
+    if let Some(thread) = id.strip_prefix(crate::watch::codex::ROW_PREFIX) {
+        return workspace_of(state, id).map_or(NOTHING_RAISED, |cwd| reveal_codex(thread, &cwd));
+    }
     // From the snapshot the poll publishes, never from the watcher: the polling thread holds
     // that lock while it reads directories and tails transcripts, and a click must not wait
     // behind a disk.
@@ -698,6 +701,63 @@ fn raise_for(id: &str, state: &tauri::State<'_, App>) -> crate::raise::Raise {
     });
     reveal_session(id, &raised, host, editor, &ide, state, &mut table);
     raised
+}
+
+#[cfg(windows)]
+fn reveal_codex(thread: &str, cwd: &str) -> crate::raise::Raise {
+    use crate::watch::codex::{matching_window, session_uri};
+
+    let Some(workspace) = crate::raise::basename(cwd) else {
+        return NOTHING_RAISED;
+    };
+    let mut table = crate::watch::process::ProcessTable::new();
+    let candidates: Vec<_> = crate::win::visible_windows()
+        .into_iter()
+        .filter_map(|(window, title)| {
+            let exe = table.exe_of(crate::win::owner_of(window))?;
+            let scheme = match exe.file_name()?.to_str()? {
+                name if name.eq_ignore_ascii_case("Code.exe") => "vscode",
+                name if name.eq_ignore_ascii_case("Code - Insiders.exe") => "vscode-insiders",
+                _ => return None,
+            };
+            Some((window, title, exe, scheme))
+        })
+        .collect();
+    let Some(index) = matching_window(
+        &workspace,
+        candidates.iter().map(|candidate| candidate.1.as_str()),
+    ) else {
+        return NOTHING_RAISED;
+    };
+    let (window, _, exe, scheme) = &candidates[index];
+    let Some(uri) = session_uri(scheme, thread) else {
+        return NOTHING_RAISED;
+    };
+    let Some(cli) = crate::raise::editor_cli(exe) else {
+        return NOTHING_RAISED;
+    };
+    let Some(command) = launcher_command(&cli, &uri) else {
+        return NOTHING_RAISED;
+    };
+    if !crate::win::raise(*window) || !crate::win::foreground_is(*window) {
+        return crate::raise::Raise {
+            outcome: Outcome::Refused,
+            window: Some(*window),
+        };
+    }
+    let launched = std::process::Command::new("cmd")
+        .raw_arg(command)
+        .creation_flags(crate::win::NO_CONSOLE)
+        .spawn()
+        .is_ok();
+    crate::raise::Raise {
+        outcome: if launched {
+            Outcome::Raised
+        } else {
+            Outcome::Refused
+        },
+        window: Some(*window),
+    }
 }
 
 #[cfg(not(windows))]
@@ -869,11 +929,11 @@ fn reveal_plan(
 #[cfg(windows)]
 fn launcher_command(cli: &std::path::Path, uri: &str) -> Option<std::ffi::OsString> {
     let path = cli.to_str()?;
-    if path.contains('"') || uri.contains('"') {
+    if path.contains(['"', '%']) || uri.contains(['"', '%']) {
         return None;
     }
     Some(std::ffi::OsString::from(format!(
-        r#"/d /s /c ""{path}" --open-url "{uri}"""#
+        r#"/d /v:off /s /c ""{path}" --open-url "{uri}"""#
     )))
 }
 

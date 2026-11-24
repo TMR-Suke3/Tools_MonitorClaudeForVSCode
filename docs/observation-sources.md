@@ -468,3 +468,18 @@ session id, a timestamp, and the notification kind — never conversation conten
 | L-5 | A turn that dies on an error is visible — errors are recorded structurally. A *process* that disappears leaves no record either way, but it does leave a **trace in the registry**: measured directly, a killed process leaves its `sessions/<pid>.json` behind, while a clean exit deletes it. | The error case is detected directly. For the process case the registry entry's fate is the primary evidence, with the last transcript state and the editor's liveness as the tie-breaker (§3, and the state model §7.2). The signal is not airtight: a *later* clean exit by an unrelated session sweeps the leftover entry too, so it must be read at the moment the process dies, not reconstructed afterwards. |
 | L-6 | Two windows whose workspace folders share a **last path segment** (`.../a/docs` and `.../b/docs`) are indistinguishable by window title, because only the basename appears in it. Unlike L-1 these are genuinely different sessions. | Click-to-raise may reach the wrong window. The board itself is unaffected: grouping and status use the full `cwd`, so only the jump is approximate. A user-customised `window.title` breaks the match entirely, in which case the raise fails visibly rather than silently (ui-overlay.md §6.1). |
 | L-7 | An editor window with **no folder open** carries no folder in its lock (`workspaceFolders: []`) and none in its title either — one measured live read carried the file on screen and nothing else — `"<the open file> - Visual Studio Code - Insiders"`. There is nothing to match on, and nothing else joins a window to its own extension host: the hosts run as `--type=utility` with no window id, two windows shared one `--vscode-window-config` guid, and both windows reported the *main* process as their owner. | Named by elimination instead ([ADR-0028](adr/0028-name-the-last-window-by-elimination.md)): an extension host is per window, so the instance's other hosts account for all but one of its windows, and if exactly one is left it is this one. **Two folderless windows on one instance cannot be told apart, and neither is raised** — the same answer L-1 gives, for the case where the folder is absent rather than duplicated. Measured: 3 of 84 accumulated locks name no folder. |
+
+
+## Codex VS Code extension on Windows
+
+Read recently modified rollout JSONL files in `sessions/` under `CODEX_HOME`
+or `~/.codex`. Filter on `session_meta.payload.source` equal to `vscode`
+and use the session ID and working directory. Fold `task_started`,
+`task_complete` and `turn_aborted` by turn ID in append order. A GUI question is observed from a user-input function call. For
+asynchronous calls, acceptance confirms delivery and the matching GUI
+answer clears the wait. A blocking user-input call ends with its tool output.
+Turn completion or interruption clears outstanding questions. Questions also
+expire after 30 minutes. The optional
+`session_index.jsonl` supplies display titles. The monitor extracts operational
+metadata and never logs the JSONL content. See
+[ADR-0035](adr/0035-observe-recent-codex-ide-turns.md).

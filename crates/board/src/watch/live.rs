@@ -31,6 +31,7 @@ use mcv_core::time::Timestamp;
 
 use crate::events::{self, Mode};
 use crate::view::{BoardView, GroupState, Inspect, SessionState, build};
+use crate::watch::codex::{self, Activity, CodexWatch};
 use crate::watch::process::ProcessTable;
 use crate::watch::tail::{Polled, Tail};
 
@@ -56,6 +57,7 @@ pub struct Watcher {
     theme: Theme,
     inspect: Inspect,
     processes: ProcessTable,
+    codex: Option<CodexWatch>,
     /// One state machine per session, because a status is a fold over that session's own
     /// history — starting a fresh machine each poll would lose everything before it.
     machines: HashMap<String, Machine>,
@@ -96,6 +98,7 @@ impl Watcher {
             theme,
             inspect,
             processes: ProcessTable::new(),
+            codex: codex::sessions_dir().map(CodexWatch::new),
             machines: HashMap::new(),
             tails: HashMap::new(),
             since: HashMap::new(),
@@ -150,6 +153,38 @@ impl Watcher {
                 folded: folded(&workspace.key),
                 sessions,
             });
+        }
+
+        if let Some(watch) = &mut self.codex {
+            for session in watch.poll(now) {
+                let group_index = groups
+                    .iter()
+                    .position(|group| group.key == session.cwd)
+                    .unwrap_or_else(|| {
+                        groups.push(GroupOwned {
+                            label: mcv_core::discovery::workspace_label(&session.cwd),
+                            folded: folded(&session.cwd),
+                            key: session.cwd.clone(),
+                            sessions: Vec::new(),
+                        });
+                        groups.len() - 1
+                    });
+                let id = format!("{}{}", codex::ROW_PREFIX, session.id);
+                let fallback = format!("Session {}", &session.id[28..]);
+                groups[group_index].sessions.push(SessionOwned {
+                    id,
+                    status: match session.activity {
+                        Activity::AwaitingUser => Status::AwaitingUser,
+                        Activity::Working => Status::Working,
+                        Activity::Complete => Status::Idle,
+                    },
+                    title: session.title,
+                    opening: None,
+                    registry_name: Some(fallback),
+                    derived_name: None,
+                    time: elapsed_label(now.saturating_sub(session.at)),
+                });
+            }
         }
 
         let borrowed: Vec<GroupState<'_>> = groups

@@ -2001,7 +2001,7 @@ dependencies = [
 
 [[package]]
 name = "mcv-board"
-version = "0.1.4"
+version = "1.0.0"
 dependencies = [
  "mcv-core",
  "serde",
@@ -2016,7 +2016,7 @@ dependencies = [
 
 [[package]]
 name = "mcv-core"
-version = "0.1.4"
+version = "1.0.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2026,7 +2026,7 @@ dependencies = [
 
 [[package]]
 name = "mcv-hook"
-version = "0.1.4"
+version = "1.0.0"
 dependencies = [
  "serde",
  "serde_json",

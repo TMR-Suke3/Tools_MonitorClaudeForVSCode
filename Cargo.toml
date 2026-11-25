@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/core", "crates/board", "crates/hook"]
 
 [workspace.package]
-version = "0.1.4"
+version = "1.0.0"
 edition = "2024"
 # 1.90, not the 1.85 that edition 2024 needs: tauri 2.12 (and tauri-build, tauri-codegen and
 # muda with it) declares 1.90, and the resolver will not pick a release newer than this floor
